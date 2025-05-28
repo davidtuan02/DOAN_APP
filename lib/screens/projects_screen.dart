@@ -26,7 +26,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   }
 
   Future<void> _fetchProjects() async {
-    final url = Uri.parse('http://localhost:8000/api/projects/user/${widget.userId}'); // Updated API endpoint to fetch projects by user ID
+    final url = Uri.parse('http://localhost:8000/api/projects/user/${widget.userId}');
     final headers = {
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
@@ -36,34 +36,31 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
-        // Projects fetched successfully
         final dynamic responseData = json.decode(response.body);
         if (responseData is List<dynamic>) {
           setState(() {
             projects = responseData.map((json) => Project.fromJson(json as Map<String, dynamic>)).toList();
             if (projects.isNotEmpty) {
               selectedProject = projects[0];
+              // Fetch sprints and issues for the first project
+              if (selectedProject?.id != null) {
+                _fetchSprintsAndIssues(selectedProject!.id!);
+              }
             }
           });
         } else {
-          // Handle unexpected response format
           print('API returned an unexpected format: ${responseData.runtimeType}');
           setState(() {
-             projects = [];
-             selectedProject = null;
+            projects = [];
+            selectedProject = null;
           });
-          // TODO: Show an error message to the user about the unexpected data
         }
       } else {
-        // Error fetching projects
         print('Failed to load projects: ${response.statusCode}');
         print('Response body: ${response.body}');
-        // TODO: Show an error message to the user
       }
     } catch (e) {
-      // Network or other errors
       print('Error fetching projects: $e');
-      // TODO: Show an error message to the user
     }
   }
 
@@ -192,6 +189,100 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         selectedProject!.backlog.add(issue);
       }
     });
+
+    // Call API to update issue's sprint
+    _updateIssueSprint(issue, toSprint?.id);
+  }
+
+  Future<void> _updateIssueSprint(Issue issue, String? newSprintId) async {
+    final url = Uri.parse('http://localhost:8000/api/tasks/${issue.id}/sprint');
+    final headers = {
+      'Content-Type': 'application/json',
+      'tasks_token': widget.accessToken,
+    };
+
+    try {
+      final response = await http.put(
+        url,
+        headers: headers,
+        body: json.encode({
+          'sprintId': newSprintId,
+        }),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        print('Successfully updated issue sprint');
+      } else {
+        print('Failed to update issue sprint: ${response.statusCode}');
+        print('Response body: ${response.body}');
+        // Revert the UI change if the API call fails
+        setState(() {
+          if (newSprintId == null) {
+            // Moving to backlog failed, move back to original sprint
+            selectedProject!.backlog.remove(issue);
+            for (var sprint in selectedProject!.sprints) {
+              if (sprint.id == issue.sprintId) {
+                sprint.issues.add(issue);
+                break;
+              }
+            }
+          } else {
+            // Moving to sprint failed, move back to original location
+            for (var sprint in selectedProject!.sprints) {
+              if (sprint.id == newSprintId) {
+                sprint.issues.remove(issue);
+                break;
+              }
+            }
+            if (issue.sprintId == null) {
+              selectedProject!.backlog.add(issue);
+            } else {
+              for (var sprint in selectedProject!.sprints) {
+                if (sprint.id == issue.sprintId) {
+                  sprint.issues.add(issue);
+                  break;
+                }
+              }
+            }
+          }
+        });
+        // TODO: Show error message to user
+      }
+    } catch (e) {
+      print('Error updating issue sprint: $e');
+      // Revert the UI change if the API call fails
+      setState(() {
+        if (newSprintId == null) {
+          // Moving to backlog failed, move back to original sprint
+          selectedProject!.backlog.remove(issue);
+          for (var sprint in selectedProject!.sprints) {
+            if (sprint.id == issue.sprintId) {
+              sprint.issues.add(issue);
+              break;
+            }
+          }
+        } else {
+          // Moving to sprint failed, move back to original location
+          for (var sprint in selectedProject!.sprints) {
+            if (sprint.id == newSprintId) {
+              sprint.issues.remove(issue);
+              break;
+            }
+          }
+          if (issue.sprintId == null) {
+            selectedProject!.backlog.add(issue);
+          } else {
+            for (var sprint in selectedProject!.sprints) {
+              if (sprint.id == issue.sprintId) {
+                sprint.issues.add(issue);
+                break;
+              }
+            }
+          }
+        }
+      });
+      // TODO: Show error message to user
+    }
   }
 
   void _showCreateIssueDialog(BuildContext context, Sprint? sprint) {
@@ -211,6 +302,201 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           },
         );
       },
+    );
+  }
+
+  void _showIssueDetails(BuildContext context, Issue issue) {
+    String selectedStatus = issue.status;
+    final List<String> statusOptions = ['CREATED', 'IN_PROGRESS', 'REVIEW', 'DONE'];
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              child: Container(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            issue.title,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    if (issue.description.isNotEmpty) ...[
+                      const Text(
+                        'Description:',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(issue.description),
+                      const SizedBox(height: 16),
+                    ],
+                    const Text(
+                      'Details:',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildDetailRow('ID', issue.id),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 100,
+                            child: Text(
+                              'Status:',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: DropdownButton<String>(
+                              value: selectedStatus,
+                              isExpanded: true,
+                              items: statusOptions.map((String status) {
+                                return DropdownMenuItem<String>(
+                                  value: status,
+                                  child: Text(status),
+                                );
+                              }).toList(),
+                              onChanged: (String? newValue) {
+                                if (newValue != null) {
+                                  setState(() {
+                                    selectedStatus = newValue;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _buildDetailRow('Priority', issue.priority),
+                    if (issue.type != null && issue.type!.isNotEmpty)
+                      _buildDetailRow('Type', issue.type!),
+                    if (issue.assignee.isNotEmpty)
+                      _buildDetailRow('Assignee', issue.assignee),
+                    if (issue.sprintId != null)
+                      _buildDetailRow('Sprint ID', issue.sprintId!),
+                    if (issue.createdAt != null)
+                      _buildDetailRow('Created At', _formatDateTime(issue.createdAt!)),
+                    if (issue.updatedAt != null)
+                      _buildDetailRow('Updated At', _formatDateTime(issue.updatedAt!)),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () async {
+                            Navigator.of(context).pop();
+                            await _updateIssue(issue, selectedStatus);
+                          },
+                          child: const Text('Save Changes'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _updateIssue(Issue issue, String newStatus) async {
+    final url = Uri.parse('http://localhost:8000/api/tasks/${issue.id}');
+    final headers = {
+      'Content-Type': 'application/json',
+      'tasks_token': widget.accessToken,
+    };
+
+    try {
+      final response = await http.put(
+        url,
+        headers: headers,
+        body: json.encode({
+          'taskName': issue.title,
+          'taskDescription': issue.description,
+          'status': newStatus,
+          'priority': issue.priority,
+          'storyPoints': 0, // TODO: Add story points field to Issue model
+        }),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        print('Successfully updated issue');
+        // Refresh the sprints and issues list
+        if (selectedProject?.id != null) {
+          await _fetchSprintsAndIssues(selectedProject!.id!);
+        }
+      } else {
+        print('Failed to update issue: ${response.statusCode}');
+        print('Response body: ${response.body}');
+        // TODO: Show error message to user
+      }
+    } catch (e) {
+      print('Error updating issue: $e');
+      // TODO: Show error message to user
+    }
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute}';
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              '$label:',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(value),
+          ),
+        ],
+      ),
     );
   }
 
@@ -386,54 +672,57 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                       ),
                       child: Card(
                         margin: const EdgeInsets.all(4),
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                issue.title ?? '',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
+                        child: InkWell(
+                          onTap: () => _showIssueDetails(context, issue),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  issue.title ?? '',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              if (issue.description != null && issue.description!.isNotEmpty)
+                                if (issue.description != null && issue.description!.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4.0),
+                                    child: Text(
+                                      issue.description!,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(color: Colors.grey[600]),
+                                    ),
+                                  ),
                                 Padding(
-                                  padding: const EdgeInsets.only(top: 4.0),
-                                  child: Text(
-                                    issue.description!,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(color: Colors.grey[600]),
+                                  padding: const EdgeInsets.only(top: 8.0),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      if (issue.type != null && issue.type!.isNotEmpty)
+                                         Chip(
+                                           label: Text(issue.type!),
+                                           visualDensity: VisualDensity.compact,
+                                         ),
+                                      Chip(
+                                        label: Text(issue.status ?? ''),
+                                        backgroundColor: _getStatusColor(issue.status ?? ''),
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      Chip(
+                                        label: Text(issue.priority ?? ''),
+                                        backgroundColor: _getPriorityColor(issue.priority ?? ''),
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      // TODO: Add assignee display
+                                    ],
                                   ),
                                 ),
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8.0),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    if (issue.type != null && issue.type!.isNotEmpty)
-                                       Chip(
-                                         label: Text(issue.type!),
-                                         visualDensity: VisualDensity.compact,
-                                       ),
-                                    Chip(
-                                      label: Text(issue.status ?? ''),
-                                      backgroundColor: _getStatusColor(issue.status ?? ''),
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                    Chip(
-                                      label: Text(issue.priority ?? ''),
-                                      backgroundColor: _getPriorityColor(issue.priority ?? ''),
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                    // TODO: Add assignee display
-                                  ],
-                                ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),

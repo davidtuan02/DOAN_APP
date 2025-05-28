@@ -61,6 +61,8 @@ class Issue {
   final String assignee;
   final String? type;
   final String? sprintId;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   Issue({
     required this.id,
@@ -71,6 +73,8 @@ class Issue {
     required this.assignee,
     this.type,
     this.sprintId,
+    this.createdAt,
+    this.updatedAt,
   });
 
   factory Issue.fromJson(Map<String, dynamic> json) {
@@ -83,6 +87,8 @@ class Issue {
       type: json['type'] is Map ? (json['type'] as Map)['name'] as String? ?? '' : json['type'] as String? ?? '',
       assignee: json['assignee'] is Map ? (json['assignee'] as Map)['name'] as String? ?? '' : json['assignee'] as String? ?? '',
       sprintId: json['sprintId'] as String?,
+      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : null,
+      updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt'] as String) : null,
     );
   }
 } 
