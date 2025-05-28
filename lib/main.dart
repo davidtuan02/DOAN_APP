@@ -4,13 +4,14 @@ import 'screens/issues_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/accounts_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/main_screen.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -26,15 +27,20 @@ class MyApp extends StatelessWidget {
         '/main': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
           if (args != null && args is Map<String, dynamic>) {
-            return MainScreen(
-              userId: args['userId'] as String,
-              accessToken: args['accessToken'] as String,
-            );
+            final userId = args['userId'] as String?;
+            final accessToken = args['accessToken'] as String?;
+
+            if (userId != null && accessToken != null) {
+              return MainScreen(userId: userId, accessToken: accessToken);
+            } else {
+              print('Invalid arguments received for /main route: userId=$userId, accessToken=$accessToken');
+              Future.microtask(() => Navigator.pushReplacementNamed(context, '/login'));
+              return const SizedBox();
+            }
           } else {
-            // If arguments are missing or invalid, redirect to login
-            // This is a simple way to handle this; more complex apps might show an error or a loading screen
+            print('No arguments received for /main route or unexpected type: $args');
             Future.microtask(() => Navigator.pushReplacementNamed(context, '/login'));
-            return const Scaffold(body: Center(child: CircularProgressIndicator())); // Or some other placeholder widget
+            return const SizedBox();
           }
         },
       },
@@ -63,7 +69,7 @@ class _MainScreenState extends State<MainScreen> {
     _screens = [
       ProjectsScreen(userId: widget.userId, accessToken: widget.accessToken),
       const IssuesScreen(),
-      const NotificationsScreen(),
+      NotificationsScreen(accessToken: widget.accessToken),
       const AccountsScreen(),
     ];
   }
