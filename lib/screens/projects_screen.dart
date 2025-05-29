@@ -35,9 +35,12 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     try {
       final response = await http.get(url, headers: headers);
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final dynamic responseData = json.decode(response.body);
         if (responseData is List<dynamic>) {
+          if (!mounted) return;
           setState(() {
             projects = responseData.map((json) => Project.fromJson(json as Map<String, dynamic>)).toList();
             if (projects.isNotEmpty) {
@@ -50,6 +53,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           });
         } else {
           print('API returned an unexpected format: ${responseData.runtimeType}');
+          if (!mounted) return;
           setState(() {
             projects = [];
             selectedProject = null;
@@ -66,6 +70,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
 
   Future<void> _fetchSprintsAndIssues(String projectId) async {
     // Clear existing sprints and backlog
+    if (!mounted) return;
     setState(() {
       selectedProject?.sprints.clear();
       selectedProject?.backlog.clear();
@@ -79,6 +84,8 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
 
     try {
       final sprintsResponse = await http.get(sprintsUrl, headers: headers);
+
+      if (!mounted) return;
 
       if (sprintsResponse.statusCode == 200) {
         print('Raw sprints response body: ${sprintsResponse.body}'); // Log the raw response body
@@ -103,6 +110,9 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
             final tasksUrl = Uri.parse('http://localhost:8000/api/tasks/project/$projectId'); // API to fetch all tasks for a project
             try {
               final tasksResponse = await http.get(tasksUrl, headers: headers);
+              
+              if (!mounted) return;
+
               if (tasksResponse.statusCode == 200) {
                 final dynamic tasksResponseData = json.decode(tasksResponse.body);
                 if (tasksResponseData is List<dynamic>) {
@@ -135,6 +145,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                      ));
                    }
 
+                  if (!mounted) return;
                   setState(() {
                     if (selectedProject != null) {
                       selectedProject!.backlog = backlogIssues;
@@ -176,6 +187,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   }
 
   void _moveIssue(Issue issue, Sprint? fromSprint, Sprint? toSprint) {
+    if (!mounted) return;
     setState(() {
       if (fromSprint != null) {
         fromSprint.issues.remove(issue);
@@ -210,12 +222,18 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         }),
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         print('Successfully updated issue sprint');
+        // After successful update, refetch data to ensure UI is consistent
+        if (!mounted) return;
+         _fetchSprintsAndIssues(selectedProject!.id!);
       } else {
         print('Failed to update issue sprint: ${response.statusCode}');
         print('Response body: ${response.body}');
         // Revert the UI change if the API call fails
+        if (!mounted) return;
         setState(() {
           if (newSprintId == null) {
             // Moving to backlog failed, move back to original sprint
@@ -251,6 +269,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     } catch (e) {
       print('Error updating issue sprint: $e');
       // Revert the UI change if the API call fails
+      if (!mounted) return;
       setState(() {
         if (newSprintId == null) {
           // Moving to backlog failed, move back to original sprint
@@ -292,6 +311,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         return CreateIssueForm(
           sprint: sprint,
           onIssueCreated: (Issue newIssue) {
+            if (!mounted) return;
             setState(() {
               if (sprint == null) {
                 selectedProject!.backlog.add(newIssue);
@@ -387,9 +407,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                               }).toList(),
                               onChanged: (String? newValue) {
                                 if (newValue != null) {
-                                  setState(() {
-                                    selectedStatus = newValue;
-                                  });
+                                   // This setState is for the dialog's state, not ProjectsScreen
+                                   setState(() {
+                                      selectedStatus = newValue;
+                                   });
                                 }
                               },
                             ),
@@ -420,7 +441,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                         ElevatedButton(
                           onPressed: () async {
                             Navigator.of(context).pop();
-                            await _updateIssue(issue, selectedStatus);
+                            // Add mounted check before calling _updateIssue
+                            if (mounted) {
+                              await _updateIssue(issue, selectedStatus);
+                            }
                           },
                           child: const Text('Save Changes'),
                         ),
@@ -448,20 +472,17 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         url,
         headers: headers,
         body: json.encode({
-          'taskName': issue.title,
-          'taskDescription': issue.description,
           'status': newStatus,
-          'priority': issue.priority,
-          'storyPoints': 0, // TODO: Add story points field to Issue model
         }),
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         print('Successfully updated issue');
-        // Refresh the sprints and issues list
-        if (selectedProject?.id != null) {
-          await _fetchSprintsAndIssues(selectedProject!.id!);
-        }
+        // After successful update, refetch data to ensure UI is consistent
+        if (!mounted) return;
+         _fetchSprintsAndIssues(selectedProject!.id!);
       } else {
         print('Failed to update issue: ${response.statusCode}');
         print('Response body: ${response.body}');
@@ -474,7 +495,8 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   }
 
   String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute}';
+    // You can use intl package for more complex formatting if needed
+    return '${dateTime.toLocal()}'.split('.')[0]; // Simple formatting
   }
 
   Widget _buildDetailRow(String label, String value) {
@@ -498,6 +520,34 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         ],
       ),
     );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'CREATED':
+        return Colors.blue.shade100;
+      case 'IN_PROGRESS':
+        return Colors.orange.shade100;
+      case 'REVIEW':
+        return Colors.purple.shade100;
+      case 'DONE':
+        return Colors.green.shade100;
+      default:
+        return Colors.grey.shade300;
+    }
+  }
+
+  Color _getPriorityColor(String priority) {
+    switch (priority) {
+      case 'High':
+        return Colors.red.shade100;
+      case 'Medium':
+        return Colors.orange.shade100;
+      case 'Low':
+        return Colors.green.shade100;
+      default:
+        return Colors.grey.shade300;
+    }
   }
 
   @override
@@ -532,6 +582,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                 );
               }).toList(),
               onChanged: (Project? newValue) {
+                if (!mounted) return;
                 setState(() {
                   selectedProject = newValue;
                 });
@@ -640,6 +691,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                   shrinkWrap: true,
                   itemCount: issues.length,
                   onReorder: (oldIndex, newIndex) {
+                    if (!mounted) return;
                     setState(() {
                       if (newIndex > oldIndex) {
                         newIndex -= 1;
@@ -735,31 +787,5 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         ),
       ),
     );
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'done':
-        return Colors.green.withOpacity(0.2);
-      case 'in progress':
-        return Colors.blue.withOpacity(0.2);
-      case 'to do':
-        return Colors.grey.withOpacity(0.2);
-      default:
-        return Colors.grey.withOpacity(0.2);
-    }
-  }
-
-  Color _getPriorityColor(String priority) {
-    switch (priority.toLowerCase()) {
-      case 'high':
-        return Colors.red.withOpacity(0.2);
-      case 'medium':
-        return Colors.orange.withOpacity(0.2);
-      case 'low':
-        return Colors.green.withOpacity(0.2);
-      default:
-        return Colors.grey.withOpacity(0.2);
-    }
   }
 } 

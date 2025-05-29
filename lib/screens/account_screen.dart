@@ -9,7 +9,7 @@ class AccountScreen extends StatefulWidget {
   const AccountScreen({Key? key, required this.accessToken}) : super(key: key);
 
   @override
-  State<AccountScreen> createState() => _AccountScreenState();
+  _AccountScreenState createState() => _AccountScreenState();
 }
 
 class _AccountScreenState extends State<AccountScreen> {
@@ -141,6 +141,48 @@ class _AccountScreenState extends State<AccountScreen> {
     }
   }
 
+  Future<void> _logout() async {
+    final url = Uri.parse('http://localhost:8000/api/auth/logout');
+    final headers = {
+      'Content-Type': 'application/json',
+      'tasks_token': widget.accessToken,
+    };
+
+    try {
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: json.encode({}), // Explicitly send empty JSON object
+      );
+
+      if (!mounted) return; // Add mounted check after async operation
+
+      if (response.statusCode == 201) {
+        print('Logout successful');
+        // Navigate back to login screen
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/login',
+          (Route<dynamic> route) => false,
+        );
+      } else {
+        print('Logout failed: ${response.statusCode}');
+        print('Response body: ${response.body}');
+        // TODO: Show error message to user
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Logout failed')),
+        );
+      }
+    } catch (e) {
+      print('Error during logout: $e');
+      // TODO: Show error message to user
+      if (!mounted) return; // Add mounted check after async operation in catch
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error during logout: ${e.toString()}')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -242,6 +284,13 @@ class _AccountScreenState extends State<AccountScreen> {
                   }
                   return null;
                 },
+              ),
+              const SizedBox(height: 32),
+              Center(
+                child: ElevatedButton(
+                  onPressed: _logout,
+                  child: const Text('Logout'),
+                ),
               ),
             ],
           ),

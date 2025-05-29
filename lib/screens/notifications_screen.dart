@@ -5,8 +5,13 @@ import '../models/notification.dart';
 
 class NotificationsScreen extends StatefulWidget {
   final String accessToken;
+  final Function(int) onUnreadCountChanged;
 
-  const NotificationsScreen({Key? key, required this.accessToken}) : super(key: key);
+  const NotificationsScreen({
+    Key? key, 
+    required this.accessToken,
+    required this.onUnreadCountChanged,
+  }) : super(key: key);
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -77,6 +82,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         setState(() {
           _unreadCount = countData['count'] ?? 0;
         });
+        widget.onUnreadCountChanged(_unreadCount);
       } else {
         print('Failed to load unread count: ${response.statusCode}');
         print('Response body: ${response.body}');
