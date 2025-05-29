@@ -6,58 +6,68 @@ import '../models/user.dart';
 class AccountScreen extends StatefulWidget {
   final String accessToken;
 
-  const AccountScreen({Key? key, required this.accessToken}) : super(key: key);
+  const AccountScreen({
+    Key? key,
+    required this.accessToken,
+  }) : super(key: key);
 
   @override
-  _AccountScreenState createState() => _AccountScreenState();
+  State<AccountScreen> createState() => _AccountScreenState();
 }
 
 class _AccountScreenState extends State<AccountScreen> {
   User? user;
-  bool isLoading = true;
+  bool isLoading = false;
   bool isEditing = false;
   final _formKey = GlobalKey<FormState>();
-  late TextEditingController _firstNameController;
-  late TextEditingController _lastNameController;
-  late TextEditingController _ageController;
-  late TextEditingController _emailController;
-  late TextEditingController _usernameController;
+  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _ageController = TextEditingController();
+  final _roleController = TextEditingController();
+  String _email = '';
+  String _username = '';
+  int _age = 0;
+  String _role = '';
 
   @override
   void initState() {
     super.initState();
-    _fetchUserProfile();
+    _fetchProfile();
   }
 
   @override
   void dispose() {
-    _firstNameController.dispose();
-    _lastNameController.dispose();
-    _ageController.dispose();
     _emailController.dispose();
     _usernameController.dispose();
+    _ageController.dispose();
+    _roleController.dispose();
     super.dispose();
   }
 
-  Future<void> _fetchUserProfile() async {
-    setState(() {
-      isLoading = true;
-    });
-
+  Future<void> _fetchProfile() async {
     try {
       final response = await http.get(
-        Uri.parse('http://localhost:8000/api/auth/profile'),
+        Uri.parse('http://192.168.0.101:8000/api/auth/profile'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
         },
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
-        final userData = json.decode(response.body);
+        final data = json.decode(response.body);
+        print('Profile data: $data'); // Debug print
         setState(() {
-          user = User.fromJson(userData);
-          _initializeControllers();
+          _email = data['email'] ?? '';
+          _username = data['username'] ?? '';
+          _age = data['age'] ?? 0;
+          _role = data['role'] ?? '';
+          _emailController.text = _email;
+          _usernameController.text = _username;
+          _ageController.text = _age.toString();
+          _roleController.text = _role;
           isLoading = false;
         });
       } else {
@@ -66,280 +76,232 @@ class _AccountScreenState extends State<AccountScreen> {
         setState(() {
           isLoading = false;
         });
-        // TODO: Show error message
       }
     } catch (e) {
       print('Error fetching profile: $e');
+      if (!mounted) return;
       setState(() {
         isLoading = false;
       });
-      // TODO: Show error message
-    }
-  }
-
-  void _initializeControllers() {
-    if (user != null) {
-      _firstNameController = TextEditingController(text: user!.firstName);
-      _lastNameController = TextEditingController(text: user!.lastName);
-      _ageController = TextEditingController(text: user!.age.toString());
-      _emailController = TextEditingController(text: user!.email);
-      _usernameController = TextEditingController(text: user!.username);
     }
   }
 
   Future<void> _updateProfile() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        isLoading = true;
+      });
 
-    setState(() {
-      isLoading = true;
-    });
-
-    try {
-      final response = await http.patch(
-        Uri.parse('http://localhost:8000/api/auth/profile'),
-        headers: {
-          'Content-Type': 'application/json',
-          'tasks_token': widget.accessToken,
-        },
-        body: json.encode({
-          'firstName': _firstNameController.text,
-          'lastName': _lastNameController.text,
-          'age': int.parse(_ageController.text),
-          'email': _emailController.text,
-          'username': _usernameController.text,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final userData = json.decode(response.body);
-        setState(() {
-          user = User.fromJson(userData);
-          isEditing = false;
-          isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully')),
+      try {
+        final response = await http.patch(
+          Uri.parse('http://192.168.0.101:8000/api/auth/profile'),
+          headers: {
+            'Content-Type': 'application/json',
+            'tasks_token': widget.accessToken,
+          },
+          body: json.encode({
+            'email': _emailController.text,
+            'username': _usernameController.text,
+            'age': int.parse(_ageController.text),
+          }),
         );
-      } else {
-        print('Failed to update profile: ${response.statusCode}');
-        print('Response body: ${response.body}');
+
+        if (!mounted) return;
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          setState(() {
+            _email = _emailController.text;
+            _username = _usernameController.text;
+            _age = int.parse(_ageController.text);
+            isLoading = false;
+            isEditing = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile updated successfully')),
+          );
+        } else {
+          print('Failed to update profile: ${response.statusCode}');
+          print('Response body: ${response.body}');
+          setState(() {
+            isLoading = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to update profile')),
+          );
+        }
+      } catch (e) {
+        print('Error updating profile: $e');
+        if (!mounted) return;
         setState(() {
           isLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to update profile')),
+          const SnackBar(content: Text('An error occurred')),
         );
       }
-    } catch (e) {
-      print('Error updating profile: $e');
-      setState(() {
-        isLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error updating profile')),
-      );
     }
   }
 
   Future<void> _logout() async {
-    final url = Uri.parse('http://localhost:8000/api/auth/logout');
-    final headers = {
-      'Content-Type': 'application/json',
-      'tasks_token': widget.accessToken,
-    };
-
     try {
       final response = await http.post(
-        url,
-        headers: headers,
-        body: json.encode({}), // Explicitly send empty JSON object
+        Uri.parse('http://192.168.0.101:8000/api/auth/logout'),
+        headers: {
+          'Content-Type': 'application/json',
+          'tasks_token': widget.accessToken,
+        },
       );
 
-      if (!mounted) return; // Add mounted check after async operation
+      if (!mounted) return;
 
       if (response.statusCode == 201) {
-        print('Logout successful');
-        // Navigate back to login screen
-        Navigator.pushNamedAndRemoveUntil(
-          context,
-          '/login',
-          (Route<dynamic> route) => false,
-        );
+        // Navigate to login screen
+        Navigator.pushReplacementNamed(context, '/login');
       } else {
-        print('Logout failed: ${response.statusCode}');
+        print('Failed to logout: ${response.statusCode}');
         print('Response body: ${response.body}');
-        // TODO: Show error message to user
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Logout failed')),
+          const SnackBar(content: Text('Failed to logout')),
         );
       }
     } catch (e) {
       print('Error during logout: $e');
-      // TODO: Show error message to user
-      if (!mounted) return; // Add mounted check after async operation in catch
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error during logout: ${e.toString()}')),
+        const SnackBar(content: Text('An error occurred during logout')),
       );
     }
   }
 
+  void _toggleEditMode() {
+    setState(() {
+      isEditing = !isEditing;
+      if (!isEditing) {
+        // Reset form when canceling edit
+        _emailController.text = _email;
+        _usernameController.text = _username;
+        _ageController.text = _age.toString();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (user == null) {
-      return const Center(child: Text('Failed to load profile'));
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Account'),
         actions: [
           IconButton(
-            icon: Icon(isEditing ? Icons.save : Icons.edit),
-            onPressed: () {
-              if (isEditing) {
-                _updateProfile();
-              } else {
-                setState(() {
-                  isEditing = true;
-                });
-              }
-            },
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
+            tooltip: 'Logout',
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildProfileField(
-                'First Name',
-                _firstNameController,
-                isEditing: isEditing,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your first name';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              _buildProfileField(
-                'Last Name',
-                _lastNameController,
-                isEditing: isEditing,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your last name';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              _buildProfileField(
-                'Age',
-                _ageController,
-                isEditing: isEditing,
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your age';
-                  }
-                  if (int.tryParse(value) == null) {
-                    return 'Please enter a valid number';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              _buildProfileField(
-                'Email',
-                _emailController,
-                isEditing: isEditing,
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your email';
-                  }
-                  if (!value.contains('@')) {
-                    return 'Please enter a valid email';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              _buildProfileField(
-                'Username',
-                _usernameController,
-                isEditing: isEditing,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your username';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 32),
-              Center(
-                child: ElevatedButton(
-                  onPressed: _logout,
-                  child: const Text('Logout'),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextFormField(
+                      controller: _emailController,
+                      decoration: const InputDecoration(
+                        labelText: 'Email',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.emailAddress,
+                      enabled: isEditing,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your email';
+                        }
+                        if (!RegExp(r'\S+@\S+\.\S+').hasMatch(value)) {
+                          return 'Please enter a valid email address';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16.0),
+                    TextFormField(
+                      controller: _usernameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Username',
+                        border: OutlineInputBorder(),
+                      ),
+                      enabled: isEditing,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your username';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16.0),
+                    TextFormField(
+                      controller: _ageController,
+                      decoration: const InputDecoration(
+                        labelText: 'Age',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      enabled: isEditing,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your age';
+                        }
+                        if (int.tryParse(value) == null) {
+                          return 'Please enter a valid number';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16.0),
+                    TextFormField(
+                      controller: _roleController,
+                      decoration: const InputDecoration(
+                        labelText: 'Role',
+                        border: OutlineInputBorder(),
+                      ),
+                      enabled: false, // Always disabled for role
+                    ),
+                    const SizedBox(height: 24.0),
+                    if (!isEditing)
+                      ElevatedButton(
+                        onPressed: _toggleEditMode,
+                        child: const Text('Edit Profile'),
+                      )
+                    else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: isLoading ? null : _updateProfile,
+                              child: isLoading
+                                  ? const CircularProgressIndicator()
+                                  : const Text('Save'),
+                            ),
+                          ),
+                          const SizedBox(width: 16.0),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _toggleEditMode,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.grey,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Cancel'),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileField(
-    String label,
-    TextEditingController controller, {
-    required bool isEditing,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        if (isEditing)
-          TextFormField(
-            controller: controller,
-            keyboardType: keyboardType,
-            validator: validator,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
             ),
-          )
-        else
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(controller.text),
-          ),
-      ],
     );
   }
 } 

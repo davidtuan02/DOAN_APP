@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../models/notification.dart';
+import '../models/notification.dart' as notif_model;
 
 class NotificationsScreen extends StatefulWidget {
   final String accessToken;
   final Function(int) onUnreadCountChanged;
 
   const NotificationsScreen({
-    Key? key, 
+    Key? key,
     required this.accessToken,
     required this.onUnreadCountChanged,
   }) : super(key: key);
@@ -18,179 +18,181 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  List<UserNotification> _notifications = [];
-  int _unreadCount = 0;
-  bool _isLoading = true;
+  List<notif_model.UserNotification> _notifications = [];
+  bool _isLoading = false;
+  bool _showUnreadOnly = false; // State variable for filtering
 
   @override
   void initState() {
     super.initState();
     _fetchNotifications();
-    _fetchUnreadCount();
   }
 
   Future<void> _fetchNotifications() async {
+    if (_isLoading) return;
+
     setState(() {
       _isLoading = true;
     });
+
     try {
       final response = await http.get(
-        Uri.parse('http://localhost:8000/api/notifications'),
+        Uri.parse('http://192.168.0.101:8000/api/notifications'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
         },
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
-        List<dynamic> notificationsJson = json.decode(response.body);
+        final List<dynamic> data = json.decode(response.body);
         setState(() {
-          _notifications = notificationsJson
-              .map((json) => UserNotification.fromJson(json))
-              .toList();
+          _notifications = data.map((json) => notif_model.UserNotification.fromJson(json)).toList();
           _isLoading = false;
         });
+        _updateUnreadCount(); // Update unread count after fetching
       } else {
         print('Failed to load notifications: ${response.statusCode}');
         print('Response body: ${response.body}');
         setState(() {
           _isLoading = false;
         });
-        // TODO: Show error message
       }
     } catch (e) {
       print('Error fetching notifications: $e');
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
-      // TODO: Show error message
     }
   }
 
-  Future<void> _fetchUnreadCount() async {
-     try {
-      final response = await http.get(
-        Uri.parse('http://localhost:8000/api/notifications/count'),
-        headers: {
-          'Content-Type': 'application/json',
-          'tasks_token': widget.accessToken,
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final countData = json.decode(response.body);
-        setState(() {
-          _unreadCount = countData['count'] ?? 0;
-        });
-        widget.onUnreadCountChanged(_unreadCount);
-      } else {
-        print('Failed to load unread count: ${response.statusCode}');
-        print('Response body: ${response.body}');
-        // TODO: Show error message
-      }
-    } catch (e) {
-      print('Error fetching unread count: $e');
-      // TODO: Show error message
-    }
-  }
-
-  Future<void> _markAsRead(String id) async {
+  Future<void> _markAsRead(String notificationId) async {
     try {
-      final response = await http.post(
-        Uri.parse('http://localhost:8000/api/notifications/$id/read'),
+      final response = await http.patch(
+        Uri.parse('http://192.168.0.101:8000/api/notifications/$notificationId/read'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
         },
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
-        _fetchNotifications();
-        _fetchUnreadCount();
+        setState(() {
+          final index = _notifications.indexWhere((notif) => notif.id == notificationId);
+          if (index != -1) {
+            _notifications[index].isRead = true;
+          }
+        });
+        _updateUnreadCount(); // Update unread count after marking as read
       } else {
         print('Failed to mark as read: ${response.statusCode}');
         print('Response body: ${response.body}');
-        // TODO: Show error message
       }
     } catch (e) {
       print('Error marking as read: $e');
-      // TODO: Show error message
+      if (!mounted) return;
     }
   }
 
-  Future<void> _markAllAsRead() async {
+   Future<void> _markAllAsRead() async {
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       final response = await http.post(
-        Uri.parse('http://localhost:8000/api/notifications/read-all'),
+        Uri.parse('http://192.168.0.101:8000/api/notifications/read-all'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
         },
       );
 
-      if (response.statusCode == 200) {
-        _fetchNotifications();
-        _fetchUnreadCount();
+      if (!mounted) return;
+
+      if (response.statusCode == 204) {
+        setState(() {
+          for (var notif in _notifications) {
+            notif.isRead = true;
+          }
+          _isLoading = false;
+        });
+        _fetchNotifications(); // Reload notifications after marking all as read
       } else {
         print('Failed to mark all as read: ${response.statusCode}');
         print('Response body: ${response.body}');
-        // TODO: Show error message
+         setState(() {
+          _isLoading = false;
+        });
       }
     } catch (e) {
       print('Error marking all as read: $e');
-      // TODO: Show error message
+      if (!mounted) return;
+       setState(() {
+        _isLoading = false;
+      });
     }
   }
 
-  Future<void> _deleteNotification(String id) async {
-    try {
-      final response = await http.delete(
-        Uri.parse('http://localhost:8000/api/notifications/$id'),
-        headers: {
-          'Content-Type': 'application/json',
-          'tasks_token': widget.accessToken,
-        },
-      );
-
-      if (response.statusCode == 200) {
-        _fetchNotifications();
-        _fetchUnreadCount();
-      } else {
-        print('Failed to delete notification: ${response.statusCode}');
-        print('Response body: ${response.body}');
-        // TODO: Show error message
-      }
-    } catch (e) {
-      print('Error deleting notification: $e');
-      // TODO: Show error message
-    }
+  void _updateUnreadCount() {
+    final unreadCount = _notifications.where((notif) => !notif.isRead).length;
+    widget.onUnreadCountChanged(unreadCount);
   }
 
   @override
   Widget build(BuildContext context) {
+    // Apply filter to the notifications list
+    final displayedNotifications = _showUnreadOnly
+        ? _notifications.where((notification) => !notification.isRead).toList()
+        : _notifications;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notifications'),
-        actions: [
+         actions: [
+          // Filter toggle
+          Row(
+            children: [
+              const Text('Chưa đọc'),
+              Switch(
+                value: _showUnreadOnly,
+                onChanged: (value) {
+                  setState(() {
+                    _showUnreadOnly = value;
+                  });
+                },
+              ),
+            ],
+          ),
+          // Mark all as read button
           IconButton(
             icon: const Icon(Icons.mark_email_read),
-            onPressed: _markAllAsRead,
             tooltip: 'Mark all as read',
+            onPressed: _markAllAsRead,
           ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _notifications.isEmpty
-              ? const Center(child: Text('No notifications'))
+          : displayedNotifications.isEmpty
+              ? Center(
+                  child: Text(_showUnreadOnly
+                      ? 'Không có thông báo chưa đọc'
+                      : 'Không có thông báo nào'),
+                )
               : ListView.builder(
-                  itemCount: _notifications.length,
+                  itemCount: displayedNotifications.length,
                   itemBuilder: (context, index) {
-                    final notification = _notifications[index];
+                    final notification = displayedNotifications[index];
                     return ListTile(
-                      title: Text(notification.title),
+                      title: Text(notification.title ?? ''),
                       subtitle: Text(
-                        '${notification.message}\n${notification.formattedCreatedAt}',
+                        '${notification.message ?? ''}\n${notification.formattedCreatedAt}',
                       ),
                       isThreeLine: true,
                       tileColor: notification.isRead ? null : Colors.blue.shade50,
@@ -200,12 +202,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         }
                         // TODO: Navigate based on notification.link
                       },
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () {
-                          _deleteNotification(notification.id);
-                        },
-                      ),
+                      // TODO: Add trailing icon for deletion if needed
                     );
                   },
                 ),

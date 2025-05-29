@@ -14,24 +14,25 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
-  String _errorMessage = '';
+  String? _errorMessage;
 
   Future<void> _login() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
-        _errorMessage = '';
-      });
-
-      final url = Uri.parse('http://localhost:8000/api/auth/login'); // Updated API endpoint
-      final headers = {'Content-Type': 'application/json'};
-      final body = json.encode({
-        'username': _emailController.text.trim(), // Using username as per API, assuming email is username
-        'password': _passwordController.text,
+        _errorMessage = null;
       });
 
       try {
-        final response = await http.post(url, headers: headers, body: body);
+        final url = Uri.parse('http://192.168.0.101:8000/api/auth/login');
+        final response = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'username': _emailController.text,
+            'password': _passwordController.text,
+          }),
+        );
 
         if (response.statusCode == 200 || response.statusCode == 201) {
           // Login successful
@@ -125,11 +126,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       ? CircularProgressIndicator(color: Colors.white)
                       : Text('Login'),
                 ),
-                if (_errorMessage.isNotEmpty)
+                if (_errorMessage != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 16.0),
                     child: Text(
-                      _errorMessage,
+                      _errorMessage!,
                       style: TextStyle(color: Colors.red),
                       textAlign: TextAlign.center,
                     ),
