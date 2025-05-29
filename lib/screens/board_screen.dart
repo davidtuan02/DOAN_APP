@@ -3,7 +3,9 @@ import '../models/project.dart'; // Assuming Project, Sprint, Issue are defined 
 import 'dart:math';
 
 class BoardScreen extends StatefulWidget {
-  const BoardScreen({Key? key}) : super(key: key);
+  final Project project; // Add project parameter
+
+  const BoardScreen({Key? key, required this.project}) : super(key: key);
 
   @override
   State<BoardScreen> createState() => _BoardScreenState();
@@ -23,63 +25,13 @@ class _BoardScreenState extends State<BoardScreen> {
   @override
   void initState() {
     super.initState();
-    _generateMockData();
-    _selectDefaultSprint();
+    // Use the project passed to the widget to initialize data
+    _sprints = widget.project.sprints;
+    _filterIssuesBySprint(widget.project.sprints.isNotEmpty ? widget.project.sprints[0] : null);
+     _selectedSprint = widget.project.sprints.isNotEmpty ? widget.project.sprints[0] : null;
   }
 
-  void _generateMockData() {
-    // Mock Sprints
-    _sprints = ['Sprint 1', 'Sprint 2', 'Sprint 3'].map((name) {
-      final id = UniqueKey().toString();
-      return Sprint(
-        id: id,
-        name: name,
-        startDate: DateTime.now().subtract(Duration(days: 14)),
-        endDate: DateTime.now().add(Duration(days: 14)),
-        issues: [], // Issues will be assigned below
-      );
-    }).toList();
-
-    // Mock Issues
-    List<Issue> allMockIssues = [
-      Issue(id: '1', title: 'Setup project', description: 'Initial project setup', status: 'DONE', priority: 'High', type: 'Task', assignee: 'user1', sprintId: _sprints[0].id!, createdAt: DateTime.now(), updatedAt: DateTime.now()),
-      Issue(id: '2', title: 'Implement login screen', description: 'Develop the user login interface', status: 'IN_PROGRESS', priority: 'High', type: 'Task', assignee: 'user2', sprintId: _sprints[0].id!, createdAt: DateTime.now(), updatedAt: DateTime.now()),
-      Issue(id: '3', title: 'Design database schema', description: 'Create the database structure', status: 'REVIEW', priority: 'Medium', type: 'Task', assignee: 'user1', sprintId: _sprints[0].id!, createdAt: DateTime.now(), updatedAt: DateTime.now()),
-      Issue(id: '4', title: 'Write API documentation', description: 'Document the REST APIs', status: 'CREATED', priority: 'Low', type: 'Task', assignee: 'user3', sprintId: _sprints[0].id!, createdAt: DateTime.now(), updatedAt: DateTime.now()),
-      Issue(id: '5', title: 'Fix minor UI bug', description: 'Correct alignment issue on dashboard', status: 'CREATED', priority: 'High', type: 'Bug', assignee: 'user2', sprintId: _sprints[0].id!, createdAt: DateTime.now(), updatedAt: DateTime.now()),
-      Issue(id: '6', title: 'Plan next sprint', description: 'Outline tasks for the next sprint', status: 'CREATED', priority: 'Medium', type: 'Task', assignee: 'user1', sprintId: _sprints[1].id!, createdAt: DateTime.now(), updatedAt: DateTime.now()),
-      Issue(id: '7', title: 'Refactor authentication module', description: 'Improve code structure for auth', status: 'CREATED', priority: 'High', type: 'Task', assignee: 'user3', sprintId: _sprints[1].id!, createdAt: DateTime.now(), updatedAt: DateTime.now()),
-    ];
-
-    // Distribute issues into columns based on status
-    for (var issue in allMockIssues) {
-      if (_kanbanColumns.containsKey(issue.status)) {
-        _kanbanColumns[issue.status]!.add(issue);
-      }
-    }
-
-    // Assign issues to sprints for the Sprint model structure (optional, mainly for mock data consistency)
-    for (var issue in allMockIssues) {
-      if (issue.sprintId != null && issue.sprintId!.isNotEmpty) {
-        final sprint = _sprints.firstWhere((s) => s.id == issue.sprintId);
-        sprint.issues.add(issue);
-      }
-    }
-
-    setState(() {}); // Update UI after generating data
-  }
-
-  void _selectDefaultSprint() {
-    if (_sprints.isNotEmpty) {
-      setState(() {
-        _selectedSprint = _sprints[0];
-        // Filter issues based on the selected sprint
-        _filterIssuesBySprint(_selectedSprint);
-      });
-    }
-  }
-
-   void _filterIssuesBySprint(Sprint? sprint) {
+  void _filterIssuesBySprint(Sprint? sprint) {
     // Regenerate _kanbanColumns based on the selected sprint's issues
     _kanbanColumns = {
       'CREATED': [],

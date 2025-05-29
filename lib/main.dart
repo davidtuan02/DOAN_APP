@@ -5,8 +5,10 @@ import 'screens/notifications_screen.dart';
 import 'screens/account_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
+import 'screens/project_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'models/project.dart';
 
 void main() {
   runApp(const MyApp());
@@ -63,6 +65,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   int _unreadCount = 0;
+  Project? _selectedProject;
 
   late final List<Widget> _screens;
 
@@ -70,7 +73,7 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _screens = [
-      const BoardScreen(),
+      ProjectScreen(onProjectSelected: _handleProjectSelected),
       BacklogScreen(userId: widget.userId, accessToken: widget.accessToken),
       NotificationsScreen(
         accessToken: widget.accessToken,
@@ -85,6 +88,13 @@ class _MainScreenState extends State<MainScreen> {
       ),
     ];
     _fetchUnreadCount();
+  }
+
+  void _handleProjectSelected(Project project) {
+    setState(() {
+      _selectedProject = project;
+      _selectedIndex = 1;
+    });
   }
 
   Future<void> _fetchUnreadCount() async {
@@ -117,18 +127,41 @@ class _MainScreenState extends State<MainScreen> {
     setState(() {
       _selectedIndex = index;
     });
-    if (index == 2) {
+    if (index == 3) {
       _fetchUnreadCount();
     }
+  }
+
+  Widget _buildScreen(int index) {
+    if (index == 0) {
+      return _screens[0];
+    } else if (index == 1) {
+      if (_selectedProject != null) {
+        return BoardScreen(project: _selectedProject!);
+      } else {
+        return const Center(child: Text('Please select a project from the Projects tab.'));
+      }
+    } else if (index == 2) {
+      return _screens[1];
+    } else if (index == 3) {
+      return _screens[2];
+    } else if (index == 4) {
+      return _screens[3];
+    }
+    return const SizedBox();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_selectedIndex],
+      body: _buildScreen(_selectedIndex),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         items: <BottomNavigationBarItem>[
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.folder_open),
+            label: 'Projects',
+          ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.dashboard),
             label: 'Board',
