@@ -8,12 +8,14 @@ class ProjectsScreen extends StatefulWidget {
   final String userId;
   final String accessToken;
   final Function(Project)? onProjectSelected;
+  final Project? initialProject;
 
   const ProjectsScreen({
     Key? key, 
     required this.userId, 
     required this.accessToken,
     this.onProjectSelected,
+    this.initialProject,
   }) : super(key: key);
 
   @override
@@ -28,6 +30,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialProject != null) {
+      selectedProjectId = widget.initialProject!.id;
+      selectedProjectName = widget.initialProject!.name;
+    }
     _fetchProjects();
   }
 
@@ -49,7 +55,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           if (!mounted) return;
           setState(() {
             projects = responseData.map((json) => Project.fromJson(json as Map<String, dynamic>)).toList();
-            if (projects.isNotEmpty) {
+            if (projects.isNotEmpty && selectedProjectId == null) {
               selectedProjectId = projects[0].id;
               selectedProjectName = projects[0].name;
               if (widget.onProjectSelected != null) {
@@ -144,7 +150,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<Project>(
-                            value: projects.firstWhere((p) => p.id == selectedProjectId, orElse: () => projects[0]),
+                            value: projects.firstWhere(
+                              (p) => p.id == selectedProjectId,
+                              orElse: () => projects[0],
+                            ),
                             isExpanded: true,
                             icon: const Icon(Icons.arrow_drop_down),
                             hint: const Text('Select a project'),

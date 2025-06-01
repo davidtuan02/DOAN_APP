@@ -73,7 +73,12 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _rootScreens = [
-      ProjectsScreen(userId: widget.userId, accessToken: widget.accessToken),
+      ProjectsScreen(
+        userId: widget.userId, 
+        accessToken: widget.accessToken,
+        onProjectSelected: _handleProjectSelected,
+        initialProject: _selectedProject,
+      ),
       NotificationsScreen(
         accessToken: widget.accessToken,
         onUnreadCountChanged: (count) {
@@ -92,6 +97,13 @@ class _MainScreenState extends State<MainScreen> {
   void _handleProjectSelected(Project project) {
     setState(() {
       _selectedProject = project;
+      // Cập nhật lại ProjectsScreen với project mới
+      _rootScreens[0] = ProjectsScreen(
+        userId: widget.userId,
+        accessToken: widget.accessToken,
+        onProjectSelected: _handleProjectSelected,
+        initialProject: project,
+      );
     });
   }
 
@@ -134,9 +146,10 @@ class _MainScreenState extends State<MainScreen> {
     switch (index) {
       case 0:
         return ProjectsScreen(
-          userId: widget.userId, 
+          userId: widget.userId,
           accessToken: widget.accessToken,
           onProjectSelected: _handleProjectSelected,
+          initialProject: _selectedProject,
         );
       case 1:
         if (_selectedProject != null) {
