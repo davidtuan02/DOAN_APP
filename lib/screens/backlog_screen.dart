@@ -8,173 +8,42 @@ import 'dart:convert';
 class BacklogScreen extends StatefulWidget {
   final String userId;
   final String accessToken;
-  final Project selectedProject;
+  final String projectId;
+  final String projectName;
 
-  const BacklogScreen({Key? key, required this.userId, required this.accessToken, required this.selectedProject}) : super(key: key);
+  const BacklogScreen({
+    Key? key, 
+    required this.userId, 
+    required this.accessToken, 
+    required this.projectId,
+    required this.projectName,
+  }) : super(key: key);
 
   @override
   State<BacklogScreen> createState() => _BacklogScreenState();
 }
 
 class _BacklogScreenState extends State<BacklogScreen> {
-  Project? selectedProject;
-  List<Project> projects = [];
+  late Project selectedProject;
 
   @override
   void initState() {
     super.initState();
-    _fetchProjects();
-  }
-
-  Future<void> _fetchProjects() async {
-    final url = Uri.parse('http://192.168.0.100:8000/api/projects/user/${widget.userId}');
-    final headers = {
-      'Content-Type': 'application/json',
-      'tasks_token': widget.accessToken,
-    };
-
-    try {
-      final response = await http.get(url, headers: headers);
-
-      if (!mounted) return;
-
-      if (response.statusCode == 200) {
-        final dynamic responseData = json.decode(response.body);
-        if (responseData is List<dynamic>) {
-          if (!mounted) return;
-          setState(() {
-            projects = responseData.map((json) => Project.fromJson(json as Map<String, dynamic>)).toList();
-            if (projects.isNotEmpty) {
-              selectedProject = projects[0];
-              // Fetch sprints and issues for the first project
-              if (selectedProject?.id != null) {
-                _fetchSprintsAndIssues(selectedProject!.id!);
-              }
-            }
-          });
-        } else {
-          print('API returned an unexpected format: ${responseData.runtimeType}');
-          if (!mounted) return;
-          setState(() {
-            projects = [];
-            selectedProject = null;
-          });
-        }
-      } else {
-        print('Failed to load projects: ${response.statusCode}');
-        print('Response body: ${response.body}');
-      }
-    } catch (e) {
-      print('Error fetching projects: $e');
-    }
-  }
-
-  Future<void> _fetchSprintsAndIssues(String projectId) async {
-    print('Fetching sprints and issues for project: $projectId');
-    if (!mounted) return;
-
-    final sprintsUrl = Uri.parse('http://192.168.0.100:8000/api/sprints/project/$projectId');
-    final headers = {
-      'Content-Type': 'application/json',
-      'tasks_token': widget.accessToken,
-    };
-
-    try {
-      print('Fetching sprints...');
-      final sprintsResponse = await http.get(sprintsUrl, headers: headers);
-      print('Sprints response status: ${sprintsResponse.statusCode}');
-      print('Sprints response body: ${sprintsResponse.body}');
-
-      if (!mounted) return;
-
-      if (sprintsResponse.statusCode == 200) {
-        final dynamic sprintsResponseData = json.decode(sprintsResponse.body);
-
-        if (sprintsResponseData is List<dynamic>) {
-          List<Sprint> fetchedSprints = [];
-          Map<String, String> issueToSprintMap = {}; // Map to track which issue belongs to which sprint
-
-          // Process fetched sprints and build issue-to-sprint mapping
-          for (var sprintJson in sprintsResponseData) {
-            if (sprintJson is Map<String, dynamic>) {
-              final sprint = Sprint.fromJson(sprintJson);
-              fetchedSprints.add(sprint);
-              
-              // Map each issue in the sprint to its sprint ID
-              for (var issue in sprint.issues) {
-                issueToSprintMap[issue.id] = sprint.id;
-              }
-            }
-          }
-
-          // Fetch all tasks for the project
-          final tasksUrl = Uri.parse('http://192.168.0.100:8000/api/tasks/project/$projectId');
-          print('Fetching tasks...');
-          final tasksResponse = await http.get(tasksUrl, headers: headers);
-          print('Tasks response status: ${tasksResponse.statusCode}');
-          print('Tasks response body: ${tasksResponse.body}');
-              
-          if (!mounted) return;
-
-          if (tasksResponse.statusCode == 200) {
-            final dynamic tasksResponseData = json.decode(tasksResponse.body);
-            if (tasksResponseData is List<dynamic>) {
-              List<Issue> allTasks = tasksResponseData.map((issueJson) {
-                final issue = Issue.fromJson(issueJson as Map<String, dynamic>);
-                // Set sprintId based on our mapping
-                issue.sprintId = issueToSprintMap[issue.id];
-                return issue;
-              }).toList();
-
-              List<Issue> backlogIssues = [];
-              Map<String, List<Issue>> sprintIssuesMap = {};
-
-              // Separate backlog issues and sprint issues
-              for (var task in allTasks) {
-                if (task.sprintId == null || task.sprintId!.isEmpty) {
-                  backlogIssues.add(task);
-                } else {
-                  if (!sprintIssuesMap.containsKey(task.sprintId)) {
-                    sprintIssuesMap[task.sprintId!] = [];
-                  }
-                  sprintIssuesMap[task.sprintId!]!.add(task);
-                }
-              }
-
-              // Assign issues to sprints
-              List<Sprint> sprintsWithIssues = [];
-              for (var sprint in fetchedSprints) {
-                sprintsWithIssues.add(Sprint(
-                  id: sprint.id,
-                  name: sprint.name,
-                  startDate: sprint.startDate,
-                  endDate: sprint.endDate,
-                  issues: sprintIssuesMap[sprint.id] ?? [],
-                ));
-              }
-
-              if (!mounted) return;
-              setState(() {
-                if (selectedProject != null) {
-                  selectedProject!.backlog = backlogIssues;
-                  selectedProject!.sprints = sprintsWithIssues;
-                }
-              });
-              print('Successfully updated project data');
-            }
-          }
-        }
-      }
-    } catch (e) {
-      print('Error fetching sprints and issues: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to refresh data. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
+    print('BacklogScreen initState called');
+    print('Project ID: ${widget.projectId}');
+    print('Project name: ${widget.projectName}');
+    
+    // Initialize project with basic info
+    selectedProject = Project(
+      id: widget.projectId,
+      name: widget.projectName,
+      description: '',
+      backlog: [],
+      sprints: [],
+    );
+    
+    // Fetch project data
+    _fetchSprintsAndIssues(widget.projectId);
   }
 
   void _moveIssue(Issue issue, Sprint? fromSprint, Sprint? toSprint) async {
@@ -188,9 +57,9 @@ class _BacklogScreenState extends State<BacklogScreen> {
       await _updateIssueSprint(issue, toSprint?.id, toSprint);
       
       // After successful API call, refresh the data
-      if (mounted && selectedProject?.id != null) {
+      if (mounted && selectedProject.id != null) {
         print('Refreshing data after move...');
-        await _fetchSprintsAndIssues(selectedProject!.id!);
+        await _fetchSprintsAndIssues(selectedProject.id!);
         print('Data refresh completed');
       }
     } catch (e) {
@@ -244,9 +113,9 @@ class _BacklogScreenState extends State<BacklogScreen> {
         issue.sprintId = toSprint?.id;
         
         // Force refresh data after successful update
-        if (mounted && selectedProject?.id != null) {
+        if (mounted && selectedProject.id != null) {
           print('Starting data refresh after successful update...');
-          await _fetchSprintsAndIssues(selectedProject!.id!);
+          await _fetchSprintsAndIssues(selectedProject.id!);
           print('Data refresh completed after update');
         }
       } else {
@@ -270,7 +139,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
             if (!mounted) return;
             setState(() {
               if (sprint == null) {
-                selectedProject!.backlog.add(newIssue);
+                selectedProject.backlog.add(newIssue);
               }
               else {
                 sprint.issues.add(newIssue);
@@ -438,7 +307,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         print('Successfully updated issue');
         if (!mounted) return;
-         _fetchSprintsAndIssues(selectedProject!.id!);
+         _fetchSprintsAndIssues(selectedProject.id!);
       } else {
         print('Failed to update issue: ${response.statusCode}');
         print('Response body: ${response.body}');
@@ -504,217 +373,278 @@ class _BacklogScreenState extends State<BacklogScreen> {
     }
   }
 
+  Future<void> _fetchSprintsAndIssues(String projectId) async {
+    print('Fetching sprints and issues for project: $projectId');
+    if (!mounted) return;
+
+    final sprintsUrl = Uri.parse('http://192.168.0.100:8000/api/sprints/project/$projectId');
+    final headers = {
+      'Content-Type': 'application/json',
+      'tasks_token': widget.accessToken,
+    };
+
+    try {
+      print('Fetching sprints...');
+      final sprintsResponse = await http.get(sprintsUrl, headers: headers);
+      print('Sprints response status: ${sprintsResponse.statusCode}');
+      print('Sprints response body: ${sprintsResponse.body}');
+
+      if (!mounted) return;
+
+      if (sprintsResponse.statusCode == 200) {
+        final dynamic sprintsResponseData = json.decode(sprintsResponse.body);
+
+        if (sprintsResponseData is List<dynamic>) {
+          List<Sprint> fetchedSprints = [];
+          Map<String, String> issueToSprintMap = {}; // Map to track which issue belongs to which sprint
+
+          // Process fetched sprints and build issue-to-sprint mapping
+          for (var sprintJson in sprintsResponseData) {
+            if (sprintJson is Map<String, dynamic>) {
+              final sprint = Sprint.fromJson(sprintJson);
+              fetchedSprints.add(sprint);
+              
+              // Map each issue in the sprint to its sprint ID
+              for (var issue in sprint.issues) {
+                issueToSprintMap[issue.id] = sprint.id;
+              }
+            }
+          }
+
+          // Fetch all tasks for the project
+          final tasksUrl = Uri.parse('http://192.168.0.100:8000/api/tasks/project/$projectId');
+          print('Fetching tasks...');
+          final tasksResponse = await http.get(tasksUrl, headers: headers);
+          print('Tasks response status: ${tasksResponse.statusCode}');
+          print('Tasks response body: ${tasksResponse.body}');
+              
+          if (!mounted) return;
+
+          if (tasksResponse.statusCode == 200) {
+            final dynamic tasksResponseData = json.decode(tasksResponse.body);
+            if (tasksResponseData is List<dynamic>) {
+              List<Issue> allTasks = tasksResponseData.map((issueJson) {
+                final issue = Issue.fromJson(issueJson as Map<String, dynamic>);
+                // Set sprintId based on our mapping
+                issue.sprintId = issueToSprintMap[issue.id];
+                return issue;
+              }).toList();
+
+              List<Issue> backlogIssues = [];
+              Map<String, List<Issue>> sprintIssuesMap = {};
+
+              // Separate backlog issues and sprint issues
+              for (var task in allTasks) {
+                if (task.sprintId == null || task.sprintId!.isEmpty) {
+                  backlogIssues.add(task);
+                } else {
+                  if (!sprintIssuesMap.containsKey(task.sprintId)) {
+                    sprintIssuesMap[task.sprintId!] = [];
+                  }
+                  sprintIssuesMap[task.sprintId!]!.add(task);
+                }
+              }
+
+              // Assign issues to sprints
+              List<Sprint> sprintsWithIssues = [];
+              for (var sprint in fetchedSprints) {
+                sprintsWithIssues.add(Sprint(
+                  id: sprint.id,
+                  name: sprint.name,
+                  startDate: sprint.startDate,
+                  endDate: sprint.endDate,
+                  issues: sprintIssuesMap[sprint.id] ?? [],
+                ));
+              }
+
+              if (!mounted) return;
+              setState(() {
+                if (selectedProject != null) {
+                  selectedProject.backlog = backlogIssues;
+                  selectedProject.sprints = sprintsWithIssues;
+                }
+              });
+              print('Successfully updated project data');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('Error fetching sprints and issues: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to refresh data. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    print('BacklogScreen build called');
+    print('Current selected project: ${selectedProject.name}');
+    print('Current backlog count: ${selectedProject.backlog.length}');
+    print('Current sprints count: ${selectedProject.sprints.length}');
+    
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Backlog'),
+        title: Text(selectedProject.name ?? 'Backlog'),
         elevation: 2,
         backgroundColor: Theme.of(context).primaryColor,
       ),
-      body: selectedProject == null
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                // Project selector
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.withOpacity(0.2),
-                        spreadRadius: 1,
-                        blurRadius: 3,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: DropdownButton<Project>(
-                    value: selectedProject,
-                    isExpanded: true,
-                    underline: Container(
-                      height: 2,
-                      color: Theme.of(context).primaryColor,
-                    ),
-                    items: projects.map((Project project) {
-                      return DropdownMenuItem<Project>(
-                        value: project,
-                        child: Text(
-                          project.name ?? '',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (Project? newValue) {
-                      if (newValue != null) {
-                        setState(() {
-                          selectedProject = newValue;
-                        });
-                        _fetchSprintsAndIssues(newValue.id!);
-                      }
-                    },
-                  ),
-                ),
-                // Main content
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Padding(
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Backlog section
+              Card(
+                elevation: 2,
+                margin: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
                       padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withOpacity(0.1),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(4),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          // Backlog section
-                          Card(
-                            elevation: 2,
-                            margin: const EdgeInsets.only(bottom: 16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).primaryColor.withOpacity(0.1),
-                                    borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(4),
-                                      topRight: Radius.circular(4),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text(
-                                        'Backlog',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      TextButton.icon(
-                                        onPressed: () {
-                                          _showCreateIssueDialog(context, null);
-                                        },
-                                        icon: const Icon(Icons.add),
-                                        label: const Text('Create Issue'),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (selectedProject!.backlog.isEmpty)
-                                  const Padding(
-                                    padding: EdgeInsets.all(16),
-                                    child: Center(
-                                      child: Text(
-                                        'No issues in backlog',
-                                        style: TextStyle(
-                                          color: Colors.grey,
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      ),
-                                    ),
-                                  )
-                                else
-                                  ListView.builder(
-                                    shrinkWrap: true,
-                                    physics: const NeverScrollableScrollPhysics(),
-                                    itemCount: selectedProject!.backlog.length,
-                                    itemBuilder: (context, index) {
-                                      final issue = selectedProject!.backlog[index];
-                                      return _buildIssueCard(issue, null);
-                                    },
-                                  ),
-                              ],
+                          const Text(
+                            'Backlog',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          // Sprints section
-                          ...selectedProject!.sprints.map((sprint) {
-                            return Card(
-                              elevation: 2,
-                              margin: const EdgeInsets.only(bottom: 16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context).primaryColor.withOpacity(0.1),
-                                      borderRadius: const BorderRadius.only(
-                                        topLeft: Radius.circular(4),
-                                        topRight: Radius.circular(4),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                sprint.name,
-                                                style: const TextStyle(
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                '${sprint.startDate} - ${sprint.endDate}',
-                                                style: TextStyle(
-                                                  color: Colors.grey[600],
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        TextButton.icon(
-                                          onPressed: () {
-                                            _showCreateIssueDialog(context, sprint);
-                                          },
-                                          icon: const Icon(Icons.add),
-                                          label: const Text('Create Issue'),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (sprint.issues.isEmpty)
-                                    const Padding(
-                                      padding: EdgeInsets.all(16),
-                                      child: Center(
-                                        child: Text(
-                                          'No issues in this sprint',
-                                          style: TextStyle(
-                                            color: Colors.grey,
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                  else
-                                    ListView.builder(
-                                      shrinkWrap: true,
-                                      physics: const NeverScrollableScrollPhysics(),
-                                      itemCount: sprint.issues.length,
-                                      itemBuilder: (context, index) {
-                                        final issue = sprint.issues[index];
-                                        return _buildIssueCard(issue, sprint);
-                                      },
-                                    ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
+                          TextButton.icon(
+                            onPressed: () {
+                              _showCreateIssueDialog(context, null);
+                            },
+                            icon: const Icon(Icons.add),
+                            label: const Text('Create Issue'),
+                          ),
                         ],
                       ),
                     ),
-                  ),
+                    if (selectedProject.backlog.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(
+                          child: Text(
+                            'No issues in backlog',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: selectedProject.backlog.length,
+                        itemBuilder: (context, index) {
+                          final issue = selectedProject.backlog[index];
+                          return _buildIssueCard(issue, null);
+                        },
+                      ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              // Sprints section
+              ...selectedProject.sprints.map((sprint) {
+                return Card(
+                  elevation: 2,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).primaryColor.withOpacity(0.1),
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            topRight: Radius.circular(4),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    sprint.name,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${sprint.startDate} - ${sprint.endDate}',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () {
+                                _showCreateIssueDialog(context, sprint);
+                              },
+                              icon: const Icon(Icons.add),
+                              label: const Text('Create Issue'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (sprint.issues.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Center(
+                            child: Text(
+                              'No issues in this sprint',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: sprint.issues.length,
+                          itemBuilder: (context, index) {
+                            final issue = sprint.issues[index];
+                            return _buildIssueCard(issue, sprint);
+                          },
+                        ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -779,7 +709,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
               print('Moving to backlog...');
               _moveIssue(issue, sprint, null);
             } else {
-              final targetSprint = selectedProject!.sprints.firstWhere(
+              final targetSprint = selectedProject.sprints.firstWhere(
                 (s) => s.id == newSprintId,
                 orElse: () => sprint!,
               );
@@ -794,7 +724,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
                 value: 'backlog',
                 child: Text('Move to Backlog'),
               ),
-              ...selectedProject!.sprints.map((s) {
+              ...selectedProject.sprints.map((s) {
                 return PopupMenuItem<String>(
                   value: s.id,
                   child: Text('Move to ${s.name}'),

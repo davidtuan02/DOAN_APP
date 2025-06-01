@@ -92,7 +92,6 @@ class _MainScreenState extends State<MainScreen> {
   void _handleProjectSelected(Project project) {
     setState(() {
       _selectedProject = project;
-      _selectedIndex = 1;
     });
   }
 
@@ -134,7 +133,11 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildScreen(int index) {
     switch (index) {
       case 0:
-        return ProjectsScreen(userId: widget.userId, accessToken: widget.accessToken, onProjectSelected: _handleProjectSelected);
+        return ProjectsScreen(
+          userId: widget.userId, 
+          accessToken: widget.accessToken,
+          onProjectSelected: _handleProjectSelected,
+        );
       case 1:
         if (_selectedProject != null) {
           return BoardScreen(project: _selectedProject!);
@@ -143,7 +146,12 @@ class _MainScreenState extends State<MainScreen> {
         }
       case 2:
         if (_selectedProject != null) {
-          return BacklogScreen(userId: widget.userId, accessToken: widget.accessToken, selectedProject: _selectedProject!);
+          return BacklogScreen(
+            userId: widget.userId,
+            accessToken: widget.accessToken,
+            projectId: _selectedProject!.id!,
+            projectName: _selectedProject!.name ?? 'Unnamed Project',
+          );
         } else {
           return const Center(child: Text('Please select a project from the Projects tab.'));
         }
