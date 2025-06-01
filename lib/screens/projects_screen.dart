@@ -8,8 +8,9 @@ import 'dart:convert';
 class ProjectsScreen extends StatefulWidget {
   final String userId;
   final String accessToken;
+  final Function(Project)? onProjectSelected;
 
-  const ProjectsScreen({Key? key, required this.userId, required this.accessToken}) : super(key: key);
+  const ProjectsScreen({Key? key, required this.userId, required this.accessToken, this.onProjectSelected}) : super(key: key);
 
   @override
   State<ProjectsScreen> createState() => _ProjectsScreenState();
@@ -26,7 +27,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   }
 
   Future<void> _fetchProjects() async {
-    final url = Uri.parse('http://localhost:8000/api/projects/user/${widget.userId}');
+    final url = Uri.parse('http://192.168.0.100:8000/api/projects/user/${widget.userId}');
     final headers = {
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
@@ -69,26 +70,29 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   }
 
   Future<void> _fetchSprintsAndIssues(String projectId) async {
+    print('Fetching sprints and issues for project: $projectId');
     // Clear existing sprints and backlog
     if (!mounted) return;
     setState(() {
+      print('Clearing existing sprints and backlog');
       selectedProject?.sprints.clear();
       selectedProject?.backlog.clear();
     });
 
-    final sprintsUrl = Uri.parse('http://localhost:8000/api/sprints/project/$projectId'); // API to fetch sprints for a project
+    final sprintsUrl = Uri.parse('http://192.168.0.100:8000/api/sprints/project/$projectId');
     final headers = {
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
     };
 
     try {
+      print('Fetching sprints...');
       final sprintsResponse = await http.get(sprintsUrl, headers: headers);
 
       if (!mounted) return;
 
       if (sprintsResponse.statusCode == 200) {
-        print('Raw sprints response body: ${sprintsResponse.body}'); // Log the raw response body
+        print('Sprints response received: ${sprintsResponse.body}');
         try {
           final dynamic sprintsResponseData = json.decode(sprintsResponse.body);
 
@@ -100,23 +104,24 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               if (sprintJson is Map<String, dynamic>) {
                 final sprint = Sprint.fromJson(sprintJson);
                 fetchedSprints.add(sprint);
-              } else {
-                // Handle unexpected item in the sprints list
-                print('Unexpected item format in sprints list: ${sprintJson.runtimeType} - Value: $sprintJson');
+                print('Added sprint: ${sprint.name} with ${sprint.issues.length} issues');
               }
             }
 
             // Fetch all tasks for the project
-            final tasksUrl = Uri.parse('http://localhost:8000/api/tasks/project/$projectId'); // API to fetch all tasks for a project
+            print('Fetching tasks...');
+            final tasksUrl = Uri.parse('http://192.168.0.100:8000/api/tasks/project/$projectId');
             try {
               final tasksResponse = await http.get(tasksUrl, headers: headers);
               
               if (!mounted) return;
 
               if (tasksResponse.statusCode == 200) {
+                print('Tasks response received: ${tasksResponse.body}');
                 final dynamic tasksResponseData = json.decode(tasksResponse.body);
                 if (tasksResponseData is List<dynamic>) {
                   List<Issue> allTasks = tasksResponseData.map((issueJson) => Issue.fromJson(issueJson as Map<String, dynamic>)).toList();
+                  print('Total tasks fetched: ${allTasks.length}');
 
                   List<Issue> backlogIssues = [];
                   Map<String, List<Issue>> sprintIssuesMap = {};
@@ -125,80 +130,87 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                   for (var task in allTasks) {
                     if (task.sprintId == null || task.sprintId!.isEmpty) {
                       backlogIssues.add(task);
+                      print('Added to backlog: ${task.title}');
                     } else {
                       if (!sprintIssuesMap.containsKey(task.sprintId)) {
                         sprintIssuesMap[task.sprintId!] = [];
                       }
                       sprintIssuesMap[task.sprintId!]!.add(task);
+                      print('Added to sprint ${task.sprintId}: ${task.title}');
                     }
                   }
 
                   // Assign issues to sprints
                   List<Sprint> sprintsWithIssues = [];
                   for (var sprint in fetchedSprints) {
-                     sprintsWithIssues.add(Sprint(
-                       id: sprint.id,
-                       name: sprint.name,
-                       startDate: sprint.startDate,
-                       endDate: sprint.endDate,
-                       issues: sprintIssuesMap[sprint.id] ?? [], // Assign issues for this sprint
-                     ));
-                   }
+                    final sprintIssues = sprintIssuesMap[sprint.id] ?? [];
+                    sprintsWithIssues.add(Sprint(
+                      id: sprint.id,
+                      name: sprint.name,
+                      startDate: sprint.startDate,
+                      endDate: sprint.endDate,
+                      issues: sprintIssues,
+                    ));
+                    print('Sprint ${sprint.name} has ${sprintIssues.length} issues');
+                  }
 
                   if (!mounted) return;
+                  print('Updating UI with new data...');
                   setState(() {
                     if (selectedProject != null) {
                       selectedProject!.backlog = backlogIssues;
                       selectedProject!.sprints = sprintsWithIssues;
+                      print('UI updated - Backlog: ${backlogIssues.length} issues, Sprints: ${sprintsWithIssues.length}');
                     }
                   });
 
                 } else {
                   print('API returned unexpected format for tasks list: ${tasksResponseData.runtimeType}');
-                  // TODO: Show an error message
                 }
               } else {
                 print('Failed to load tasks list: ${tasksResponse.statusCode}');
                 print('Response body: ${tasksResponse.body}');
-                // TODO: Show an error message
               }
             } catch (e) {
               print('Error fetching tasks list: $e');
-              // TODO: Show an error message
             }
 
           } else {
             print('API returned an unexpected format for sprints list: ${sprintsResponseData.runtimeType}');
-            // TODO: Show an error message to the user about the unexpected data
           }
         } catch (e) {
           print('Error decoding or processing sprints list: $e');
-          // TODO: Show a more specific error message to the user
         }
       } else {
         print('Failed to load sprints list: ${sprintsResponse.statusCode}');
         print('Response body: ${sprintsResponse.body}');
-        // TODO: Show an error message to the user
       }
     } catch (e) {
-      print('Error fetching sprints list (outer catch): $e');
-      // TODO: Show an error message to the user
+      print('Error fetching sprints list: $e');
     }
   }
 
   void _moveIssue(Issue issue, Sprint? fromSprint, Sprint? toSprint) {
+    print('Moving issue: ${issue.title}');
+    print('From sprint: ${fromSprint?.name ?? 'Backlog'}');
+    print('To sprint: ${toSprint?.name ?? 'Backlog'}');
+
     if (!mounted) return;
     setState(() {
       if (fromSprint != null) {
         fromSprint.issues.remove(issue);
+        print('Removed from sprint ${fromSprint.name}');
       } else {
         selectedProject!.backlog.remove(issue);
+        print('Removed from backlog');
       }
 
       if (toSprint != null) {
         toSprint.issues.add(issue);
+        print('Added to sprint ${toSprint.name}');
       } else {
         selectedProject!.backlog.add(issue);
+        print('Added to backlog');
       }
     });
 
@@ -207,13 +219,18 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   }
 
   Future<void> _updateIssueSprint(Issue issue, String? newSprintId) async {
-    final url = Uri.parse('http://localhost:8000/api/tasks/${issue.id}/sprint');
+    print('Updating issue sprint...');
+    print('Issue: ${issue.title}');
+    print('New sprint ID: $newSprintId');
+
+    final url = Uri.parse('http://192.168.0.100:8000/api/tasks/${issue.id}/sprint');
     final headers = {
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
     };
 
     try {
+      print('Sending API request...');
       final response = await http.put(
         url,
         headers: headers,
@@ -226,9 +243,11 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         print('Successfully updated issue sprint');
+        print('Response body: ${response.body}');
         // After successful update, refetch data to ensure UI is consistent
         if (!mounted) return;
-         _fetchSprintsAndIssues(selectedProject!.id!);
+        print('Refreshing data...');
+        _fetchSprintsAndIssues(selectedProject!.id!);
       } else {
         print('Failed to update issue sprint: ${response.statusCode}');
         print('Response body: ${response.body}');
@@ -241,6 +260,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
             for (var sprint in selectedProject!.sprints) {
               if (sprint.id == issue.sprintId) {
                 sprint.issues.add(issue);
+                print('Reverted: Moved back to sprint ${sprint.name}');
                 break;
               }
             }
@@ -249,22 +269,24 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
             for (var sprint in selectedProject!.sprints) {
               if (sprint.id == newSprintId) {
                 sprint.issues.remove(issue);
+                print('Reverted: Removed from sprint ${sprint.name}');
                 break;
               }
             }
             if (issue.sprintId == null) {
               selectedProject!.backlog.add(issue);
+              print('Reverted: Moved back to backlog');
             } else {
               for (var sprint in selectedProject!.sprints) {
                 if (sprint.id == issue.sprintId) {
                   sprint.issues.add(issue);
+                  print('Reverted: Moved back to sprint ${sprint.name}');
                   break;
                 }
               }
             }
           }
         });
-        // TODO: Show error message to user
       }
     } catch (e) {
       print('Error updating issue sprint: $e');
@@ -277,6 +299,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           for (var sprint in selectedProject!.sprints) {
             if (sprint.id == issue.sprintId) {
               sprint.issues.add(issue);
+              print('Error recovery: Moved back to sprint ${sprint.name}');
               break;
             }
           }
@@ -285,22 +308,24 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           for (var sprint in selectedProject!.sprints) {
             if (sprint.id == newSprintId) {
               sprint.issues.remove(issue);
+              print('Error recovery: Removed from sprint ${sprint.name}');
               break;
             }
           }
           if (issue.sprintId == null) {
             selectedProject!.backlog.add(issue);
+            print('Error recovery: Moved back to backlog');
           } else {
             for (var sprint in selectedProject!.sprints) {
               if (sprint.id == issue.sprintId) {
                 sprint.issues.add(issue);
+                print('Error recovery: Moved back to sprint ${sprint.name}');
                 break;
               }
             }
           }
         }
       });
-      // TODO: Show error message to user
     }
   }
 
@@ -461,7 +486,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   }
 
   Future<void> _updateIssue(Issue issue, String newStatus) async {
-    final url = Uri.parse('http://localhost:8000/api/tasks/${issue.id}');
+    final url = Uri.parse('http://192.168.0.100:8000/api/tasks/${issue.id}');
     final headers = {
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
@@ -555,235 +580,313 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Projects'),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              // TODO: Implement search functionality
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: () {
+              // TODO: Implement filter functionality
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: () {
-              // TODO: Implement create new project
+              // TODO: Show create project dialog
             },
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Project Dropdown
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: DropdownButtonFormField<Project>(
-              value: selectedProject,
-              decoration: const InputDecoration(
-                labelText: 'Select Project',
-                border: OutlineInputBorder(),
-              ),
-              items: projects.map((Project project) {
-                return DropdownMenuItem<Project>(
-                  value: project,
-                  child: Text(project.name ?? ''),
-                );
-              }).toList(),
-              onChanged: (Project? newValue) {
-                if (!mounted) return;
-                setState(() {
-                  selectedProject = newValue;
-                });
-                if (newValue != null) {
-                  if (newValue.id != null) {
-                    _fetchSprintsAndIssues(newValue.id!);
-                  } else {
-                    // Handle case where selected project has a null ID (optional)
-                    print('Selected project has a null ID.');
-                  }
-                }
-              },
-            ),
-          ),
-
-          // Kanban Board
-          Expanded(
-            child: selectedProject == null
-                ? const Center(child: Text('Please select a project'))
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Backlog Column
-                        _buildColumn(
-                          'Backlog',
-                          selectedProject!.backlog,
-                          null,
+      body: projects.isEmpty && selectedProject == null
+          ? const Center(child: CircularProgressIndicator()) // Show loading indicator initially
+          : projects.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.folder_open, size: 64, color: Colors.grey.shade400),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No projects found.',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey.shade600,
                         ),
-                        // Sprint Columns
-                        ...selectedProject!.sprints.map(
-                          (sprint) => _buildColumn(
-                            sprint.name,
-                            sprint.issues,
-                            sprint,
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: () {
+                          // TODO: Show create project dialog
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('Create Project'),
+                      ),
+                    ],
+                  ),
+                )
+              : Column(
+                  children: [
+                    // Project List
+                    Expanded(
+                      flex: 1,
+                      child: ListView.builder(
+                        itemCount: projects.length,
+                        itemBuilder: (context, index) {
+                          final project = projects[index];
+                          final isSelected = selectedProject?.id == project.id;
+                          return Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            elevation: isSelected ? 2 : 1,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: isSelected 
+                                ? BorderSide(color: Theme.of(context).primaryColor, width: 2)
+                                : BorderSide.none,
+                            ),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              title: Text(
+                                project.name ?? 'Unnamed Project',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: project.description != null && project.description!.isNotEmpty
+                                  ? Padding(
+                                      padding: const EdgeInsets.only(top: 4.0),
+                                      child: Text(
+                                        project.description!,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Colors.grey.shade600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    )
+                                  : null,
+                              trailing: isSelected 
+                                ? Icon(Icons.check_circle, color: Theme.of(context).primaryColor)
+                                : const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                              onTap: () {
+                                setState(() {
+                                  selectedProject = project;
+                                  _fetchSprintsAndIssues(project.id!);
+                                });
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    // Selected Project Content
+                    if (selectedProject != null)
+                      Expanded(
+                        flex: 2,
+                        child: DefaultTabController(
+                          length: 2,
+                          child: Column(
+                            children: [
+                              TabBar(
+                                tabs: const [
+                                  Tab(text: 'Backlog'),
+                                  Tab(text: 'Board'),
+                                ],
+                              ),
+                              Expanded(
+                                child: TabBarView(
+                                  children: [
+                                    // Backlog Tab
+                                    ListView.builder(
+                                      itemCount: selectedProject!.backlog.length,
+                                      itemBuilder: (context, index) {
+                                        return _buildIssueCard(selectedProject!.backlog[index], null);
+                                      },
+                                    ),
+                                    // Board Tab
+                                    ListView.builder(
+                                      itemCount: selectedProject!.sprints.length,
+                                      itemBuilder: (context, index) {
+                                        final sprint = selectedProject!.sprints[index];
+                                        return Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Padding(
+                                              padding: const EdgeInsets.all(16.0),
+                                              child: Text(
+                                                sprint.name,
+                                                style: const TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                            ...sprint.issues.map((issue) => _buildIssueCard(issue, sprint)).toList(),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+    );
+  }
+
+  Widget _buildIssueCard(Issue issue, Sprint? sprint) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        title: Row(
+          children: [
+            Icon(
+              issue.type == 'Task' ? Icons.task : Icons.bug_report,
+              size: 16,
+              color: Colors.grey.shade600,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                issue.title ?? '',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(
+              issue.description ?? '',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getPriorityColor(issue.priority ?? '').withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    issue.priority ?? '',
+                    style: TextStyle(
+                      color: _getPriorityColor(issue.priority ?? ''),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(issue.status ?? '').withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    issue.status ?? '',
+                    style: TextStyle(
+                      color: _getStatusColor(issue.status ?? ''),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (issue.assignee.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.person,
+                          size: 12,
+                          color: Colors.blue.shade700,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          issue.assignee,
+                          style: TextStyle(
+                            color: Colors.blue.shade700,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
                     ),
                   ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // TODO: Implement create new issue
-        },
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-
-  Widget _buildColumn(String title, List<Issue> issues, Sprint? sprint) {
-    return Container(
-      width: 300,
-      margin: const EdgeInsets.all(8),
-      child: Card(
-        child: ExpansionTile(
-          title: Container(
-            padding: const EdgeInsets.all(8),
-            color: Colors.grey[200],
-            child: Row(
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '(${issues.length})',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: () {
-                    // TODO: Implement add issue to this section
-                    _showCreateIssueDialog(context, sprint);
-                  },
-                ),
+                ],
               ],
             ),
-          ),
-          children: [
-            DragTarget<Issue>(
-              onWillAccept: (issue) => true,
-              onAccept: (issue) {
-                // Find the source sprint
-                Sprint? sourceSprint;
-                for (var s in selectedProject!.sprints) {
-                  if (s.issues.contains(issue)) {
-                    sourceSprint = s;
-                    break;
-                  }
-                }
-                _moveIssue(issue, sourceSprint, sprint);
-              },
-              builder: (context, candidateItems, rejectedItems) {
-                return ReorderableListView.builder(
-                  shrinkWrap: true,
-                  itemCount: issues.length,
-                  onReorder: (oldIndex, newIndex) {
-                    if (!mounted) return;
-                    setState(() {
-                      if (newIndex > oldIndex) {
-                        newIndex -= 1;
-                      }
-                      final item = issues.removeAt(oldIndex);
-                      issues.insert(newIndex, item);
-                    });
-                  },
-                  itemBuilder: (context, index) {
-                    final issue = issues[index];
-                    return Draggable<Issue>(
-                      key: ValueKey(issue.id),
-                      data: issue,
-                      feedback: Material(
-                        elevation: 4,
-                        child: Container(
-                          width: 280,
-                          padding: const EdgeInsets.all(8),
-                          color: Colors.white,
-                          child: Text(issue.title ?? ''),
-                        ),
-                      ),
-                      childWhenDragging: Container(
-                        height: 60,
-                        margin: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      child: Card(
-                        margin: const EdgeInsets.all(4),
-                        child: InkWell(
-                          onTap: () => _showIssueDetails(context, issue),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  issue.title ?? '',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                if (issue.description != null && issue.description!.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4.0),
-                                    child: Text(
-                                      issue.description!,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(color: Colors.grey[600]),
-                                    ),
-                                  ),
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8.0),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      if (issue.type != null && issue.type!.isNotEmpty)
-                                         Chip(
-                                           label: Text(issue.type!),
-                                           visualDensity: VisualDensity.compact,
-                                         ),
-                                      Chip(
-                                        label: Text(issue.status ?? ''),
-                                        backgroundColor: _getStatusColor(issue.status ?? ''),
-                                        visualDensity: VisualDensity.compact,
-                                      ),
-                                      Chip(
-                                        label: Text(issue.priority ?? ''),
-                                        backgroundColor: _getPriorityColor(issue.priority ?? ''),
-                                        visualDensity: VisualDensity.compact,
-                                      ),
-                                      // TODO: Add assignee display
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
           ],
+        ),
+        trailing: PopupMenuButton<String>(
+          icon: Icon(Icons.more_vert, color: Colors.grey.shade600),
+          onSelected: (String? newSprintId) {
+            print('Selected menu item: ${newSprintId ?? 'Move to Backlog'}');
+            if (newSprintId == 'backlog') {
+              print('Moving to backlog...');
+              _moveIssue(issue, sprint, null);
+            } else {
+              final targetSprint = selectedProject!.sprints.firstWhere(
+                (s) => s.id == newSprintId,
+                orElse: () => sprint!,
+              );
+              print('Moving to sprint: ${targetSprint.name}');
+              _moveIssue(issue, sprint, targetSprint);
+            }
+          },
+          itemBuilder: (BuildContext context) {
+            print('Building popup menu items...');
+            final items = <PopupMenuEntry<String>>[
+              const PopupMenuItem<String>(
+                value: 'backlog',
+                child: Text('Move to Backlog'),
+              ),
+              ...selectedProject!.sprints.map((s) {
+                return PopupMenuItem<String>(
+                  value: s.id,
+                  child: Text('Move to ${s.name}'),
+                );
+              }).toList(),
+            ];
+            print('Menu items built: ${items.length} items');
+            return items;
+          },
         ),
       ),
     );

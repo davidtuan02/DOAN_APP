@@ -8,8 +8,9 @@ import 'dart:convert';
 class BacklogScreen extends StatefulWidget {
   final String userId;
   final String accessToken;
+  final Project selectedProject;
 
-  const BacklogScreen({Key? key, required this.userId, required this.accessToken}) : super(key: key);
+  const BacklogScreen({Key? key, required this.userId, required this.accessToken, required this.selectedProject}) : super(key: key);
 
   @override
   State<BacklogScreen> createState() => _BacklogScreenState();

@@ -5,7 +5,7 @@ import 'screens/notifications_screen.dart';
 import 'screens/account_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
-import 'screens/project_screen.dart';
+import 'screens/projects_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'models/project.dart';
@@ -67,14 +67,13 @@ class _MainScreenState extends State<MainScreen> {
   int _unreadCount = 0;
   Project? _selectedProject;
 
-  late final List<Widget> _screens;
+  late final List<Widget> _rootScreens;
 
   @override
   void initState() {
     super.initState();
-    _screens = [
-      ProjectScreen(onProjectSelected: _handleProjectSelected),
-      BacklogScreen(userId: widget.userId, accessToken: widget.accessToken),
+    _rootScreens = [
+      ProjectsScreen(userId: widget.userId, accessToken: widget.accessToken),
       NotificationsScreen(
         accessToken: widget.accessToken,
         onUnreadCountChanged: (count) {
@@ -133,22 +132,28 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildScreen(int index) {
-    if (index == 0) {
-      return _screens[0];
-    } else if (index == 1) {
-      if (_selectedProject != null) {
-        return BoardScreen(project: _selectedProject!);
-      } else {
-        return const Center(child: Text('Please select a project from the Projects tab.'));
-      }
-    } else if (index == 2) {
-      return _screens[1];
-    } else if (index == 3) {
-      return _screens[2];
-    } else if (index == 4) {
-      return _screens[3];
+    switch (index) {
+      case 0:
+        return ProjectsScreen(userId: widget.userId, accessToken: widget.accessToken, onProjectSelected: _handleProjectSelected);
+      case 1:
+        if (_selectedProject != null) {
+          return BoardScreen(project: _selectedProject!);
+        } else {
+          return const Center(child: Text('Please select a project from the Projects tab.'));
+        }
+      case 2:
+        if (_selectedProject != null) {
+          return BacklogScreen(userId: widget.userId, accessToken: widget.accessToken, selectedProject: _selectedProject!);
+        } else {
+          return const Center(child: Text('Please select a project from the Projects tab.'));
+        }
+      case 3:
+        return _rootScreens[1];
+      case 4:
+        return _rootScreens[2];
+      default:
+        return const SizedBox();
     }
-    return const SizedBox();
   }
 
   @override
