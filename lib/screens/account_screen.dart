@@ -47,7 +47,7 @@ class _AccountScreenState extends State<AccountScreen> {
   Future<void> _fetchProfile() async {
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.0.101:8000/api/auth/profile'),
+        Uri.parse('http://192.168.0.100:8000/api/auth/profile'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
@@ -94,7 +94,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
       try {
         final response = await http.patch(
-          Uri.parse('http://192.168.0.101:8000/api/auth/profile'),
+          Uri.parse('http://192.168.0.100:8000/api/auth/profile'),
           headers: {
             'Content-Type': 'application/json',
             'tasks_token': widget.accessToken,
@@ -145,7 +145,7 @@ class _AccountScreenState extends State<AccountScreen> {
   Future<void> _logout() async {
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.101:8000/api/auth/logout'),
+        Uri.parse('http://192.168.0.100:8000/api/auth/logout'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,

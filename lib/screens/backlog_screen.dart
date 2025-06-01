@@ -26,7 +26,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
   }
 
   Future<void> _fetchProjects() async {
-    final url = Uri.parse('http://192.168.0.101:8000/api/projects/user/${widget.userId}');
+    final url = Uri.parse('http://192.168.0.100:8000/api/projects/user/${widget.userId}');
     final headers = {
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
@@ -69,221 +69,175 @@ class _BacklogScreenState extends State<BacklogScreen> {
   }
 
   Future<void> _fetchSprintsAndIssues(String projectId) async {
-    // Clear existing sprints and backlog
+    print('Fetching sprints and issues for project: $projectId');
     if (!mounted) return;
-    setState(() {
-      selectedProject?.sprints.clear();
-      selectedProject?.backlog.clear();
-    });
-
-    final sprintsUrl = Uri.parse('http://192.168.0.101:8000/api/sprints/project/$projectId');
+    
+    final sprintsUrl = Uri.parse('http://192.168.0.100:8000/api/sprints/project/$projectId');
     final headers = {
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
     };
 
     try {
+      print('Fetching sprints...');
       final sprintsResponse = await http.get(sprintsUrl, headers: headers);
+      print('Sprints response status: ${sprintsResponse.statusCode}');
+      print('Sprints response body: ${sprintsResponse.body}');
 
       if (!mounted) return;
 
       if (sprintsResponse.statusCode == 200) {
-        print('Raw sprints response body: ${sprintsResponse.body}');
-        try {
-          final dynamic sprintsResponseData = json.decode(sprintsResponse.body);
+        final dynamic sprintsResponseData = json.decode(sprintsResponse.body);
 
-          if (sprintsResponseData is List<dynamic>) {
-            List<Sprint> fetchedSprints = [];
+        if (sprintsResponseData is List<dynamic>) {
+          List<Sprint> fetchedSprints = [];
 
-            // Process fetched sprints
-            for (var sprintJson in sprintsResponseData) {
-              if (sprintJson is Map<String, dynamic>) {
-                final sprint = Sprint.fromJson(sprintJson);
-                fetchedSprints.add(sprint);
-              } else {
-                print('Unexpected item format in sprints list: ${sprintJson.runtimeType} - Value: $sprintJson');
-              }
+          // Process fetched sprints
+          for (var sprintJson in sprintsResponseData) {
+            if (sprintJson is Map<String, dynamic>) {
+              final sprint = Sprint.fromJson(sprintJson);
+              fetchedSprints.add(sprint);
             }
-
-            // Fetch all tasks for the project
-            final tasksUrl = Uri.parse('http://192.168.0.101:8000/api/tasks/project/$projectId');
-            try {
-              final tasksResponse = await http.get(tasksUrl, headers: headers);
-              
-              if (!mounted) return;
-
-              if (tasksResponse.statusCode == 200) {
-                final dynamic tasksResponseData = json.decode(tasksResponse.body);
-                if (tasksResponseData is List<dynamic>) {
-                  List<Issue> allTasks = tasksResponseData.map((issueJson) => Issue.fromJson(issueJson as Map<String, dynamic>)).toList();
-
-                  List<Issue> backlogIssues = [];
-                  Map<String, List<Issue>> sprintIssuesMap = {};
-
-                  // Separate backlog issues and sprint issues
-                  for (var task in allTasks) {
-                    if (task.sprintId == null || task.sprintId!.isEmpty) {
-                      backlogIssues.add(task);
-                    } else {
-                      if (!sprintIssuesMap.containsKey(task.sprintId)) {
-                        sprintIssuesMap[task.sprintId!] = [];
-                      }
-                      sprintIssuesMap[task.sprintId!]!.add(task);
-                    }
-                  }
-
-                  // Assign issues to sprints
-                  List<Sprint> sprintsWithIssues = [];
-                  for (var sprint in fetchedSprints) {
-                     sprintsWithIssues.add(Sprint(
-                       id: sprint.id,
-                       name: sprint.name,
-                       startDate: sprint.startDate,
-                       endDate: sprint.endDate,
-                       issues: sprintIssuesMap[sprint.id] ?? [],
-                     ));
-                   }
-
-                  if (!mounted) return;
-                  setState(() {
-                    if (selectedProject != null) {
-                      selectedProject!.backlog = backlogIssues;
-                      selectedProject!.sprints = sprintsWithIssues;
-                    }
-                  });
-
-                } else {
-                  print('API returned unexpected format for tasks list: ${tasksResponseData.runtimeType}');
-                }
-              } else {
-                print('Failed to load tasks list: ${tasksResponse.statusCode}');
-                print('Response body: ${tasksResponse.body}');
-              }
-            } catch (e) {
-              print('Error fetching tasks list: $e');
-            }
-
-          } else {
-            print('API returned an unexpected format for sprints list: ${sprintsResponseData.runtimeType}');
           }
-        } catch (e) {
-          print('Error decoding or processing sprints list: $e');
+
+          // Fetch all tasks for the project
+          final tasksUrl = Uri.parse('http://192.168.0.100:8000/api/tasks/project/$projectId');
+          print('Fetching tasks...');
+          final tasksResponse = await http.get(tasksUrl, headers: headers);
+          print('Tasks response status: ${tasksResponse.statusCode}');
+          print('Tasks response body: ${tasksResponse.body}');
+          
+          if (!mounted) return;
+
+          if (tasksResponse.statusCode == 200) {
+            final dynamic tasksResponseData = json.decode(tasksResponse.body);
+            if (tasksResponseData is List<dynamic>) {
+              List<Issue> allTasks = tasksResponseData.map((issueJson) {
+                final issue = Issue.fromJson(issueJson as Map<String, dynamic>);
+                // Find the sprint ID from the sprints data
+                for (var sprint in fetchedSprints) {
+                  if (sprint.issues.any((i) => i.id == issue.id)) {
+                    issue.sprintId = sprint.id;
+                    break;
+                  }
+                }
+                return issue;
+              }).toList();
+
+              List<Issue> backlogIssues = [];
+              Map<String, List<Issue>> sprintIssuesMap = {};
+
+              // Separate backlog issues and sprint issues
+              for (var task in allTasks) {
+                if (task.sprintId == null || task.sprintId!.isEmpty) {
+                  backlogIssues.add(task);
+                } else {
+                  if (!sprintIssuesMap.containsKey(task.sprintId)) {
+                    sprintIssuesMap[task.sprintId!] = [];
+                  }
+                  sprintIssuesMap[task.sprintId!]!.add(task);
+                }
+              }
+
+              // Assign issues to sprints
+              List<Sprint> sprintsWithIssues = [];
+              for (var sprint in fetchedSprints) {
+                sprintsWithIssues.add(Sprint(
+                  id: sprint.id,
+                  name: sprint.name,
+                  startDate: sprint.startDate,
+                  endDate: sprint.endDate,
+                  issues: sprintIssuesMap[sprint.id] ?? [],
+                ));
+              }
+
+              if (!mounted) return;
+              setState(() {
+                if (selectedProject != null) {
+                  selectedProject!.backlog = backlogIssues;
+                  selectedProject!.sprints = sprintsWithIssues;
+                }
+              });
+              print('Successfully updated project data');
+            }
+          }
         }
-      } else {
-        print('Failed to load sprints list: ${sprintsResponse.statusCode}');
-        print('Response body: ${sprintsResponse.body}');
       }
     } catch (e) {
-      print('Error fetching sprints list (outer catch): $e');
+      print('Error fetching sprints and issues: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to refresh data. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
-  void _moveIssue(Issue issue, Sprint? fromSprint, Sprint? toSprint) {
-    if (!mounted) return;
-    setState(() {
-      if (fromSprint != null) {
-        fromSprint.issues.remove(issue);
-      } else {
-        selectedProject!.backlog.remove(issue);
+  void _moveIssue(Issue issue, Sprint? fromSprint, Sprint? toSprint) async {
+    try {
+      // Call API to update issue's sprint first
+      await _updateIssueSprint(issue, toSprint?.id, toSprint);
+      
+      // After successful API call, refresh the data
+      if (mounted && selectedProject?.id != null) {
+        await _fetchSprintsAndIssues(selectedProject!.id!);
       }
-
-      if (toSprint != null) {
-        toSprint.issues.add(issue);
-      } else {
-        selectedProject!.backlog.add(issue);
-      }
-    });
-
-    // Call API to update issue's sprint
-    _updateIssueSprint(issue, toSprint?.id);
+    } catch (e) {
+      print('Error moving issue: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to move issue. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
-  Future<void> _updateIssueSprint(Issue issue, String? newSprintId) async {
-    final url = Uri.parse('http://192.168.0.101:8000/api/tasks/${issue.id}/sprint');
+  Future<void> _updateIssueSprint(Issue issue, String? newSprintId, Sprint? toSprint) async {
+    final url = Uri.parse('http://192.168.0.100:8000/api/tasks/${issue.id}/sprint');
     final headers = {
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
     };
+
+    final body = {
+      'sprintId': newSprintId,
+    };
+
+    print('Updating issue sprint:');
+    print('URL: $url');
+    print('Headers: $headers');
+    print('Body: $body');
 
     try {
       final response = await http.put(
         url,
         headers: headers,
-        body: json.encode({
-          'sprintId': newSprintId,
-        }),
+        body: json.encode(body),
       );
+
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
 
       if (!mounted) return;
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         print('Successfully updated issue sprint');
-        if (!mounted) return;
-         _fetchSprintsAndIssues(selectedProject!.id!);
+        // Force refresh data after successful update
+        if (mounted && selectedProject?.id != null) {
+          await _fetchSprintsAndIssues(selectedProject!.id!);
+        }
       } else {
         print('Failed to update issue sprint: ${response.statusCode}');
         print('Response body: ${response.body}');
-        if (!mounted) return;
-        setState(() {
-          if (newSprintId == null) {
-            selectedProject!.backlog.remove(issue);
-            for (var sprint in selectedProject!.sprints) {
-              if (sprint.id == issue.sprintId) {
-                sprint.issues.add(issue);
-                break;
-              }
-            }
-          } else {
-            for (var sprint in selectedProject!.sprints) {
-              if (sprint.id == newSprintId) {
-                sprint.issues.remove(issue);
-                break;
-              }
-            }
-            if (issue.sprintId == null) {
-              selectedProject!.backlog.add(issue);
-            } else {
-              for (var sprint in selectedProject!.sprints) {
-                if (sprint.id == issue.sprintId) {
-                  sprint.issues.add(issue);
-                  break;
-                }
-              }
-            }
-          }
-        });
+        throw Exception('Failed to update issue sprint');
       }
     } catch (e) {
       print('Error updating issue sprint: $e');
-      if (!mounted) return;
-      setState(() {
-        if (newSprintId == null) {
-          selectedProject!.backlog.remove(issue);
-          for (var sprint in selectedProject!.sprints) {
-            if (sprint.id == issue.sprintId) {
-              sprint.issues.add(issue);
-              break;
-            }
-          }
-        } else {
-          for (var sprint in selectedProject!.sprints) {
-            if (sprint.id == newSprintId) {
-              sprint.issues.remove(issue);
-              break;
-            }
-          }
-          if (issue.sprintId == null) {
-            selectedProject!.backlog.add(issue);
-          } else {
-            for (var sprint in selectedProject!.sprints) {
-              if (sprint.id == issue.sprintId) {
-                sprint.issues.add(issue);
-                break;
-              }
-            }
-          }
-        }
-      });
+      throw e;
     }
   }
 
@@ -445,7 +399,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
   }
 
   Future<void> _updateIssue(Issue issue, String newStatus) async {
-    final url = Uri.parse('http://192.168.0.101:8000/api/tasks/${issue.id}');
+    final url = Uri.parse('http://192.168.0.100:8000/api/tasks/${issue.id}');
     final headers = {
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
@@ -536,228 +490,292 @@ class _BacklogScreenState extends State<BacklogScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Backlog'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () {
-              // TODO: Implement create new project
-            },
-          ),
-        ],
+        elevation: 2,
+        backgroundColor: Theme.of(context).primaryColor,
       ),
-      body: Column(
-        children: [
-          // Project Dropdown
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: DropdownButtonFormField<Project>(
-              value: selectedProject,
-              decoration: const InputDecoration(
-                labelText: 'Select Project',
-                border: OutlineInputBorder(),
-              ),
-              items: projects.map((Project project) {
-                return DropdownMenuItem<Project>(
-                  value: project,
-                  child: Text(project.name ?? ''),
-                );
-              }).toList(),
-              onChanged: (Project? newValue) {
-                if (!mounted) return;
-                setState(() {
-                  selectedProject = newValue;
-                });
-                if (newValue != null) {
-                  if (newValue.id != null) {
-                    _fetchSprintsAndIssues(newValue.id!);
-                  } else {
-                    // Handle case where selected project has a null ID (optional)
-                    print('Selected project has a null ID.');
-                  }
-                }
-              },
-            ),
-          ),
-
-          // Kanban Board
-          Expanded(
-            child: selectedProject == null
-                ? const Center(child: Text('Please select a project'))
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Backlog Column
-                        _buildColumn(
-                          'Backlog',
-                          selectedProject!.backlog,
-                          null,
-                        ),
-                        // Sprint Columns
-                        ...selectedProject!.sprints.map(
-                          (sprint) => _buildColumn(
-                            sprint.name,
-                            sprint.issues,
-                            sprint,
+      body: selectedProject == null
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                // Project selector
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.2),
+                        spreadRadius: 1,
+                        blurRadius: 3,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: DropdownButton<Project>(
+                    value: selectedProject,
+                    isExpanded: true,
+                    underline: Container(
+                      height: 2,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                    items: projects.map((Project project) {
+                      return DropdownMenuItem<Project>(
+                        value: project,
+                        child: Text(
+                          project.name ?? '',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                      ]
-                    ),
-                  ),
-          ),
-        ]
-      ),
-    );
-  }
-
-  Widget _buildColumn(String title, List<Issue> issues, Sprint? sprint) {
-    return Container(
-      width: 300,
-      margin: const EdgeInsets.all(8),
-      child: Card(
-        child: ExpansionTile(
-          title: Container(
-            padding: const EdgeInsets.all(8),
-            color: Colors.grey[200],
-            child: Row(
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '(${issues.length})',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: () {
-                    // TODO: Implement add issue to this section
-                    _showCreateIssueDialog(context, sprint);
-                  },
-                ),
-              ],
-            ),
-          ),
-          children: [
-            DragTarget<Issue>(
-              onWillAccept: (issue) => true,
-              onAccept: (issue) {
-                // Find the source sprint
-                Sprint? sourceSprint;
-                for (var s in selectedProject!.sprints) {
-                  if (s.issues.contains(issue)) {
-                    sourceSprint = s;
-                    break;
-                  }
-                }
-                _moveIssue(issue, sourceSprint, sprint);
-              },
-              builder: (context, candidateItems, rejectedItems) {
-                return ReorderableListView.builder(
-                  shrinkWrap: true,
-                  itemCount: issues.length,
-                  onReorder: (oldIndex, newIndex) {
-                    if (!mounted) return; 
-                    setState(() {
-                      if (newIndex > oldIndex) {
-                        newIndex -= 1;
+                      );
+                    }).toList(),
+                    onChanged: (Project? newValue) {
+                      if (newValue != null) {
+                        setState(() {
+                          selectedProject = newValue;
+                        });
+                        _fetchSprintsAndIssues(newValue.id!);
                       }
-                      final item = issues.removeAt(oldIndex);
-                      issues.insert(newIndex, item);
-                    });
-                  },
-                  itemBuilder: (context, index) {
-                    final issue = issues[index];
-                    return Draggable<Issue>(
-                      key: ValueKey(issue.id),
-                      data: issue,
-                      feedback: Material(
-                        elevation: 4,
-                        child: Container(
-                          width: 280,
-                          padding: const EdgeInsets.all(8),
-                          color: Colors.white,
-                          child: Text(issue.title ?? ''),
-                        ),
-                      ),
-                      childWhenDragging: Container(
-                        height: 60,
-                        margin: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      child: Card(
-                        margin: const EdgeInsets.all(4),
-                        child: InkWell(
-                          onTap: () => _showIssueDetails(context, issue),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
+                    },
+                  ),
+                ),
+                // Main content
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Backlog section
+                          Card(
+                            elevation: 2,
+                            margin: const EdgeInsets.only(bottom: 16),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  issue.title ?? '',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                if (issue.description != null && issue.description!.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4.0),
-                                    child: Text(
-                                      issue.description!,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(color: Colors.grey[600]),
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                                    borderRadius: const BorderRadius.only(
+                                      topLeft: Radius.circular(4),
+                                      topRight: Radius.circular(4),
                                     ),
                                   ),
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8.0),
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      if (issue.type != null && issue.type!.isNotEmpty)
-                                         Chip(
-                                           label: Text(issue.type!),
-                                           visualDensity: VisualDensity.compact,
-                                         ),
-                                      Chip(
-                                        label: Text(issue.status ?? ''),
-                                        backgroundColor: _getStatusColor(issue.status ?? ''),
-                                        visualDensity: VisualDensity.compact,
+                                      const Text(
+                                        'Backlog',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                      Chip(
-                                        label: Text(issue.priority ?? ''),
-                                        backgroundColor: _getPriorityColor(issue.priority ?? ''),
-                                        visualDensity: VisualDensity.compact,
+                                      TextButton.icon(
+                                        onPressed: () {
+                                          _showCreateIssueDialog(context, null);
+                                        },
+                                        icon: const Icon(Icons.add),
+                                        label: const Text('Create Issue'),
                                       ),
-                                      // TODO: Add assignee display
                                     ],
                                   ),
                                 ),
+                                if (selectedProject!.backlog.isEmpty)
+                                  const Padding(
+                                    padding: EdgeInsets.all(16),
+                                    child: Center(
+                                      child: Text(
+                                        'No issues in backlog',
+                                        style: TextStyle(
+                                          color: Colors.grey,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  ListView.builder(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    itemCount: selectedProject!.backlog.length,
+                                    itemBuilder: (context, index) {
+                                      final issue = selectedProject!.backlog[index];
+                                      return _buildIssueCard(issue, null);
+                                    },
+                                  ),
                               ],
                             ),
                           ),
-                        ),
+                          // Sprints section
+                          ...selectedProject!.sprints.map((sprint) {
+                            return Card(
+                              elevation: 2,
+                              margin: const EdgeInsets.only(bottom: 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).primaryColor.withOpacity(0.1),
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: Radius.circular(4),
+                                        topRight: Radius.circular(4),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                sprint.name,
+                                                style: const TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                '${sprint.startDate} - ${sprint.endDate}',
+                                                style: TextStyle(
+                                                  color: Colors.grey[600],
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        TextButton.icon(
+                                          onPressed: () {
+                                            _showCreateIssueDialog(context, sprint);
+                                          },
+                                          icon: const Icon(Icons.add),
+                                          label: const Text('Create Issue'),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (sprint.issues.isEmpty)
+                                    const Padding(
+                                      padding: EdgeInsets.all(16),
+                                      child: Center(
+                                        child: Text(
+                                          'No issues in this sprint',
+                                          style: TextStyle(
+                                            color: Colors.grey,
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    ListView.builder(
+                                      shrinkWrap: true,
+                                      physics: const NeverScrollableScrollPhysics(),
+                                      itemCount: sprint.issues.length,
+                                      itemBuilder: (context, index) {
+                                        final issue = sprint.issues[index];
+                                        return _buildIssueCard(issue, sprint);
+                                      },
+                                    ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ],
                       ),
-                    );
-                  },
-                );
-              },
+                    ),
+                  ),
+                ),
+              ],
             ),
+    );
+  }
+
+  Widget _buildIssueCard(Issue issue, Sprint? sprint) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        title: Text(
+          issue.title ?? '',
+          style: const TextStyle(
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(issue.description ?? ''),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getPriorityColor(issue.priority ?? '').withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    issue.priority ?? '',
+                    style: TextStyle(
+                      color: _getPriorityColor(issue.priority ?? ''),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(issue.status ?? '').withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    issue.status ?? '',
+                    style: TextStyle(
+                      color: _getStatusColor(issue.status ?? ''),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        trailing: PopupMenuButton<String>(
+          onSelected: (String? newSprintId) {
+            if (newSprintId == null) {
+              _moveIssue(issue, sprint, null);
+            } else {
+              final targetSprint = selectedProject!.sprints.firstWhere(
+                (s) => s.id == newSprintId,
+                orElse: () => sprint!,
+              );
+              _moveIssue(issue, sprint, targetSprint);
+            }
+          },
+          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+            const PopupMenuItem<String>(
+              value: null,
+              child: Text('Move to Backlog'),
+            ),
+            ...selectedProject!.sprints.map((s) {
+              return PopupMenuItem<String>(
+                value: s.id,
+                child: Text('Move to ${s.name}'),
+              );
+            }).toList(),
           ],
         ),
       ),

@@ -60,7 +60,7 @@ class Issue {
   final String priority;
   final String assignee;
   final String? type;
-  final String? sprintId;
+  String? sprintId;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
