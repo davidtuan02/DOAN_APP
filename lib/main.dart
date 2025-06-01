@@ -100,7 +100,7 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _fetchUnreadCount() async {
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.0.101:8000/api/notifications/count'),
+        Uri.parse('http://192.168.0.100:8000/api/notifications/count'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
