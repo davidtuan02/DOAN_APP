@@ -71,7 +71,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
   Future<void> _fetchSprintsAndIssues(String projectId) async {
     print('Fetching sprints and issues for project: $projectId');
     if (!mounted) return;
-    
+
     final sprintsUrl = Uri.parse('http://192.168.0.100:8000/api/sprints/project/$projectId');
     final headers = {
       'Content-Type': 'application/json',
@@ -91,12 +91,18 @@ class _BacklogScreenState extends State<BacklogScreen> {
 
         if (sprintsResponseData is List<dynamic>) {
           List<Sprint> fetchedSprints = [];
+          Map<String, String> issueToSprintMap = {}; // Map to track which issue belongs to which sprint
 
-          // Process fetched sprints
+          // Process fetched sprints and build issue-to-sprint mapping
           for (var sprintJson in sprintsResponseData) {
             if (sprintJson is Map<String, dynamic>) {
               final sprint = Sprint.fromJson(sprintJson);
               fetchedSprints.add(sprint);
+              
+              // Map each issue in the sprint to its sprint ID
+              for (var issue in sprint.issues) {
+                issueToSprintMap[issue.id] = sprint.id;
+              }
             }
           }
 
@@ -106,7 +112,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
           final tasksResponse = await http.get(tasksUrl, headers: headers);
           print('Tasks response status: ${tasksResponse.statusCode}');
           print('Tasks response body: ${tasksResponse.body}');
-          
+              
           if (!mounted) return;
 
           if (tasksResponse.statusCode == 200) {
@@ -114,13 +120,8 @@ class _BacklogScreenState extends State<BacklogScreen> {
             if (tasksResponseData is List<dynamic>) {
               List<Issue> allTasks = tasksResponseData.map((issueJson) {
                 final issue = Issue.fromJson(issueJson as Map<String, dynamic>);
-                // Find the sprint ID from the sprints data
-                for (var sprint in fetchedSprints) {
-                  if (sprint.issues.any((i) => i.id == issue.id)) {
-                    issue.sprintId = sprint.id;
-                    break;
-                  }
-                }
+                // Set sprintId based on our mapping
+                issue.sprintId = issueToSprintMap[issue.id];
                 return issue;
               }).toList();
 
@@ -176,13 +177,20 @@ class _BacklogScreenState extends State<BacklogScreen> {
   }
 
   void _moveIssue(Issue issue, Sprint? fromSprint, Sprint? toSprint) async {
+    print('Starting to move issue:');
+    print('Issue ID: ${issue.id}');
+    print('From Sprint: ${fromSprint?.name ?? 'Backlog'}');
+    print('To Sprint: ${toSprint?.name ?? 'Backlog'}');
+    
     try {
       // Call API to update issue's sprint first
       await _updateIssueSprint(issue, toSprint?.id, toSprint);
       
       // After successful API call, refresh the data
       if (mounted && selectedProject?.id != null) {
+        print('Refreshing data after move...');
         await _fetchSprintsAndIssues(selectedProject!.id!);
+        print('Data refresh completed');
       }
     } catch (e) {
       print('Error moving issue: $e');
@@ -203,16 +211,21 @@ class _BacklogScreenState extends State<BacklogScreen> {
       'tasks_token': widget.accessToken,
     };
 
+    // If toSprint is null, it means we're moving to backlog
     final body = {
-      'sprintId': newSprintId,
+      'sprintId': toSprint == null ? null : newSprintId,
     };
 
     print('Updating issue sprint:');
+    print('Issue ID: ${issue.id}');
+    print('Current sprint: ${issue.sprintId}');
+    print('New sprint: ${toSprint?.id ?? 'backlog'}');
     print('URL: $url');
     print('Headers: $headers');
     print('Body: $body');
 
     try {
+      print('Sending PUT request...');
       final response = await http.put(
         url,
         headers: headers,
@@ -226,9 +239,14 @@ class _BacklogScreenState extends State<BacklogScreen> {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         print('Successfully updated issue sprint');
+        // Update the issue's sprintId immediately
+        issue.sprintId = toSprint?.id;
+        
         // Force refresh data after successful update
         if (mounted && selectedProject?.id != null) {
+          print('Starting data refresh after successful update...');
           await _fetchSprintsAndIssues(selectedProject!.id!);
+          print('Data refresh completed after update');
         }
       } else {
         print('Failed to update issue sprint: ${response.statusCode}');
@@ -755,28 +773,36 @@ class _BacklogScreenState extends State<BacklogScreen> {
         ),
         trailing: PopupMenuButton<String>(
           onSelected: (String? newSprintId) {
-            if (newSprintId == null) {
+            print('Selected menu item: ${newSprintId ?? 'Move to Backlog'}');
+            if (newSprintId == 'backlog') {
+              print('Moving to backlog...');
               _moveIssue(issue, sprint, null);
             } else {
               final targetSprint = selectedProject!.sprints.firstWhere(
                 (s) => s.id == newSprintId,
                 orElse: () => sprint!,
               );
+              print('Moving to sprint: ${targetSprint.name}');
               _moveIssue(issue, sprint, targetSprint);
             }
           },
-          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-            const PopupMenuItem<String>(
-              value: null,
-              child: Text('Move to Backlog'),
-            ),
-            ...selectedProject!.sprints.map((s) {
-              return PopupMenuItem<String>(
-                value: s.id,
-                child: Text('Move to ${s.name}'),
-              );
-            }).toList(),
-          ],
+          itemBuilder: (BuildContext context) {
+            print('Building popup menu items...');
+            final items = <PopupMenuEntry<String>>[
+              const PopupMenuItem<String>(
+                value: 'backlog',
+                child: Text('Move to Backlog'),
+              ),
+              ...selectedProject!.sprints.map((s) {
+                return PopupMenuItem<String>(
+                  value: s.id,
+                  child: Text('Move to ${s.name}'),
+                );
+              }).toList(),
+            ];
+            print('Menu items built: ${items.length} items');
+            return items;
+          },
         ),
       ),
     );
