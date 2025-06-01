@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/project.dart';
-import '../data/mock_data.dart';
 import '../widgets/create_issue_form.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -38,6 +37,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
       id: widget.projectId,
       name: widget.projectName,
       description: '',
+      accessToken: widget.accessToken,
       backlog: [],
       sprints: [],
     );
@@ -460,8 +460,18 @@ class _BacklogScreenState extends State<BacklogScreen> {
               if (!mounted) return;
               setState(() {
                 if (selectedProject != null) {
-                  selectedProject.backlog = backlogIssues;
-                  selectedProject.sprints = sprintsWithIssues;
+                  selectedProject = Project(
+                    id: selectedProject.id,
+                    name: selectedProject.name,
+                    description: selectedProject.description,
+                    status: selectedProject.status,
+                    startDate: selectedProject.startDate,
+                    endDate: selectedProject.endDate,
+                    ownerId: selectedProject.ownerId,
+                    accessToken: selectedProject.accessToken,
+                    backlog: backlogIssues,
+                    sprints: sprintsWithIssues,
+                  );
                 }
               });
               print('Successfully updated project data');

@@ -1,300 +1,301 @@
 import 'package:flutter/material.dart';
-import '../models/project.dart'; // Assuming Project, Sprint, Issue are defined here
-import 'dart:math';
+import '../models/project.dart';
+import '../models/sprint.dart' as sprint_model;
+import '../models/issue.dart' as issue_model;
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+enum SprintStatus {
+  planning,
+  active,
+  completed,
+}
 
 class BoardScreen extends StatefulWidget {
-  final Project project; // Add project parameter
+  final Project project;
 
-  const BoardScreen({Key? key, required this.project}) : super(key: key);
+  const BoardScreen({
+    Key? key,
+    required this.project,
+  }) : super(key: key);
 
   @override
   State<BoardScreen> createState() => _BoardScreenState();
 }
 
 class _BoardScreenState extends State<BoardScreen> {
-  List<Sprint> _sprints = [];
-  Sprint? _selectedSprint;
-  // Map to hold issues grouped by their status (Kanban columns)
-  Map<String, List<Issue>> _kanbanColumns = {
-    'CREATED': [],
-    'IN_PROGRESS': [],
-    'REVIEW': [],
-    'DONE': [],
-  };
+  List<sprint_model.Sprint> _sprints = [];
+  sprint_model.Sprint? _selectedSprint;
+  List<issue_model.Issue> _issues = [];
+  bool _isLoading = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    // Use the project passed to the widget to initialize data
-    _sprints = widget.project.sprints;
-    _filterIssuesBySprint(widget.project.sprints.isNotEmpty ? widget.project.sprints[0] : null);
-     _selectedSprint = widget.project.sprints.isNotEmpty ? widget.project.sprints[0] : null;
+    if (widget.project.id != null) {
+      _fetchSprintsAndIssues(widget.project.id!);
+    }
   }
 
-  void _filterIssuesBySprint(Sprint? sprint) {
-    // Regenerate _kanbanColumns based on the selected sprint's issues
-    _kanbanColumns = {
+  Future<void> _fetchSprintsAndIssues(String projectId) async {
+    print('Fetching sprints and issues for project: $projectId');
+    if (!mounted) return;
+
+    final sprintsUrl = Uri.parse('http://192.168.0.100:8000/api/sprints/project/$projectId');
+    final headers = {
+      'Content-Type': 'application/json',
+      'tasks_token': widget.project.accessToken,
+    };
+
+    try {
+      print('Fetching sprints...');
+      final sprintsResponse = await http.get(sprintsUrl, headers: headers);
+      print('Sprints response status: ${sprintsResponse.statusCode}');
+      print('Sprints response body: ${sprintsResponse.body}');
+
+      if (!mounted) return;
+
+      if (sprintsResponse.statusCode == 200) {
+        final dynamic sprintsResponseData = json.decode(sprintsResponse.body);
+
+        if (sprintsResponseData is List<dynamic>) {
+          List<sprint_model.Sprint> fetchedSprints = [];
+          Map<String, String> issueToSprintMap = {};
+
+          // Process fetched sprints
+          for (var sprintJson in sprintsResponseData) {
+            if (sprintJson is Map<String, dynamic>) {
+              final sprint = sprint_model.Sprint.fromJson(sprintJson);
+              fetchedSprints.add(sprint);
+            }
+          }
+
+          // Fetch all tasks for the project
+          final tasksUrl = Uri.parse('http://192.168.0.100:8000/api/tasks/project/$projectId');
+          print('Fetching tasks...');
+          final tasksResponse = await http.get(tasksUrl, headers: headers);
+          print('Tasks response status: ${tasksResponse.statusCode}');
+          print('Tasks response body: ${tasksResponse.body}');
+              
+          if (!mounted) return;
+
+          if (tasksResponse.statusCode == 200) {
+            final dynamic tasksResponseData = json.decode(tasksResponse.body);
+            if (tasksResponseData is List<dynamic>) {
+              List<issue_model.Issue> allTasks = tasksResponseData.map((issueJson) {
+                return issue_model.Issue.fromJson(issueJson as Map<String, dynamic>);
+              }).toList();
+
+              // Filter active sprints
+              final List<sprint_model.Sprint> activeSprints = fetchedSprints
+                  .where((sprint) => sprint.status.toLowerCase() == SprintStatus.active.toString().split('.').last)
+                  .toList();
+
+              if (activeSprints.isNotEmpty) {
+                setState(() {
+                  _selectedSprint = activeSprints.first;
+                  _issues = allTasks.where((issue) => issue.sprintId == _selectedSprint?.id).toList();
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('Error fetching sprints and issues: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to refresh data. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _handleSprintChanged(sprint_model.Sprint? newSprint) {
+    if (newSprint != null) {
+      setState(() {
+        _selectedSprint = newSprint;
+      });
+      _fetchSprintsAndIssues(widget.project.id!);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading && _sprints.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null && _sprints.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_error!, style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                _fetchSprintsAndIssues(widget.project.id!);
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.project.name ?? 'Board'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              if (_selectedSprint != null) {
+                _fetchSprintsAndIssues(widget.project.id!);
+              }
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Sprint Selector
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<sprint_model.Sprint>(
+                  value: _selectedSprint,
+                  isExpanded: true,
+                  icon: const Icon(Icons.arrow_drop_down),
+                  hint: const Text('Select a sprint'),
+                  items: _sprints.map((sprint) {
+                    return DropdownMenuItem<sprint_model.Sprint>(
+                      value: sprint,
+                      child: Text(
+                        sprint.name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: _handleSprintChanged,
+                ),
+              ),
+            ),
+          ),
+          // Board Content
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(_error!, style: const TextStyle(color: Colors.red)),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: () {
+                                _fetchSprintsAndIssues(widget.project.id!);
+                              },
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _buildBoard(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBoard() {
+    // Group issues by status
+    final Map<String, List<issue_model.Issue>> issuesByStatus = {
       'CREATED': [],
       'IN_PROGRESS': [],
       'REVIEW': [],
       'DONE': [],
     };
 
-    if (sprint != null) {
-      for (var issue in sprint.issues) {
-         if (_kanbanColumns.containsKey(issue.status)) {
-           _kanbanColumns[issue.status]!.add(issue);
-         }
+    for (var issue in _issues) {
+      if (issuesByStatus.containsKey(issue.status)) {
+        issuesByStatus[issue.status]!.add(issue);
       }
     }
 
-     setState(() {}); // Update UI after filtering
-   }
-
-  void _moveIssue(Issue issue, String newStatus) {
-    setState(() {
-      // Remove issue from its current column
-      _kanbanColumns.forEach((status, issues) {
-        issues.removeWhere((item) => item.id == issue.id);
-      });
-
-      // Add issue to the new column and update its status
-      if (_kanbanColumns.containsKey(newStatus)) {
-        final updatedIssue = Issue(
-          id: issue.id,
-          title: issue.title,
-          description: issue.description,
-          status: newStatus, // Update status
-          priority: issue.priority,
-          type: issue.type,
-          assignee: issue.assignee,
-          sprintId: issue.sprintId,
-          createdAt: issue.createdAt,
-          updatedAt: DateTime.now(), // Update updated time
-        );
-        _kanbanColumns[newStatus]!.add(updatedIssue);
-        // Also update in the _sprints list for data consistency
-        final sprint = _sprints.firstWhere((s) => s.id == issue.sprintId, orElse: () => throw Exception('Sprint not found'));
-        final issueIndexInSprint = sprint.issues.indexWhere((i) => i.id == issue.id);
-        if (issueIndexInSprint != -1) {
-           sprint.issues[issueIndexInSprint] = updatedIssue;
-        }
-      }
-    });
-    // TODO: Implement API call to update issue status
-  }
-
-  void _addIssue(String description, String status) {
-    if (_selectedSprint == null) return; // Cannot add issue without a selected sprint
-
-    final newIssue = Issue(
-      id: UniqueKey().toString(), // Generate unique ID
-      title: description.split('\n')[0], // Use first line of description as title
-      description: description,
-      status: status,
-      priority: 'Medium', // Default priority
-      type: 'Task', // Default type
-      assignee: '', // No assignee by default
-      sprintId: _selectedSprint!.id,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-
-    setState(() {
-      _kanbanColumns[status]!.add(newIssue);
-      _selectedSprint!.issues.add(newIssue);
-    });
-
-    // TODO: Implement API call to create new issue
-    print('New issue added to $status: ${newIssue.title}');
-  }
-
-  void _showAddIssueDialog(String status) {
-    final _descriptionController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Add New Issue to $status'),
-          content: TextField(
-            controller: _descriptionController,
-            decoration: const InputDecoration(labelText: 'Description'),
-            maxLines: 3,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (_descriptionController.text.isNotEmpty) {
-                  _addIssue(_descriptionController.text, status);
-                  Navigator.of(context).pop();
-                }
-              },
-              child: const Text('Add'),
-            ),
-          ],
-        );
-      },
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildColumn('Created', issuesByStatus['CREATED']!),
+        _buildColumn('In Progress', issuesByStatus['IN_PROGRESS']!),
+        _buildColumn('Review', issuesByStatus['REVIEW']!),
+        _buildColumn('Done', issuesByStatus['DONE']!),
+      ],
     );
   }
 
-  void _completeSprint() {
-    // TODO: Implement sprint completion logic (move unfinished issues, etc.)
-    print('Complete Sprint pressed for ${_selectedSprint?.name}');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Board'),
-      ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Sprint Selection and Complete Button
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<Sprint>(
-                    decoration: const InputDecoration(
-                      labelText: 'Select Sprint',
-                      border: OutlineInputBorder(),
-                    ),
-                    value: _selectedSprint,
-                    items: _sprints.map((Sprint sprint) {
-                      return DropdownMenuItem<Sprint>(
-                        value: sprint,
-                        child: Text(sprint.name ?? ''),
-                      );
-                    }).toList(),
-                    onChanged: (Sprint? newValue) {
-                      if (newValue != null) {
-                        setState(() {
-                          _selectedSprint = newValue;
-                          _filterIssuesBySprint(newValue);
-                        });
-                      }
-                    },
-                  ),
+  Widget _buildColumn(String title, List<issue_model.Issue> issues) {
+    return Expanded(
+      child: Card(
+        margin: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
-                const SizedBox(width: 16.0),
-                ElevatedButton(
-                  onPressed: _selectedSprint == null ? null : _completeSprint,
-                  child: const Text('Complete Sprint'),
-                ),
-              ],
-            ),
-          ),
-          // Kanban Board Area
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: _kanbanColumns.keys.map((status) {
-                  return _buildKanbanColumn(status, _kanbanColumns[status]!);
-                }).toList(),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildKanbanColumn(String status, List<Issue> issues) {
-    return Container(
-      width: 300, // Fixed width for each column
-      margin: const EdgeInsets.all(8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '$status (${issues.length})',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: () {
-                    _showAddIssueDialog(status);
-                  },
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: DragTarget<Issue>(
-              onWillAccept: (data) => true, // Accept any dragged Issue
-              onAccept: (data) {
-                _moveIssue(data, status);
-              },
-              builder: (context, candidateData, rejectedData) {
-                return ListView.builder(
-                  itemCount: issues.length,
-                  itemBuilder: (context, index) {
-                    final issue = issues[index];
-                    return Draggable<Issue>(
-                      data: issue,
-                      feedback: Material(
-                        elevation: 4.0,
-                        child: Container(
-                          padding: const EdgeInsets.all(8.0),
-                          width: 280, // Match column width
-                          child: Text(issue.title ?? ''),
-                        ),
-                      ),
-                      childWhenDragging: Container(
-                        height: 80, // Placeholder height
-                        margin: const EdgeInsets.symmetric(vertical: 4.0),
-                        color: Colors.grey.shade200,
-                      ),
-                      child: Card(
-                        margin: const EdgeInsets.symmetric(vertical: 4.0),
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                issue.title ?? '',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              if (issue.description != null && issue.description!.isNotEmpty)
-                                Text(
-                                  issue.description!,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: Colors.grey[600]),
-                                ),
-                              // TODO: Add more issue details like assignee, priority etc.
-                            ],
+            Expanded(
+              child: ListView.builder(
+                itemCount: issues.length,
+                itemBuilder: (context, index) {
+                  final issue = issues[index];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: ListTile(
+                      title: Text(issue.title),
+                      subtitle: Text(issue.description),
+                      trailing: PopupMenuButton<String>(
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Text('Edit'),
                           ),
-                        ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Text('Delete'),
+                          ),
+                        ],
+                        onSelected: (value) {
+                          // TODO: Handle edit/delete
+                        },
                       ),
-                    );
-                  },
-                );
-              },
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

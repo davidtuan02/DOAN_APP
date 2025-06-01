@@ -1,26 +1,59 @@
+import 'sprint.dart';
+import 'issue.dart';
+
 class Project {
   final String? id;
   final String? name;
   final String? description;
-  List<Sprint> sprints;
-  List<Issue> backlog;
+  final String? status;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final String? ownerId;
+  final String accessToken;
+  final List<Sprint> sprints;
+  final List<Issue> backlog;
 
   Project({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.sprints,
-    required this.backlog,
+    this.id,
+    this.name,
+    this.description,
+    this.status,
+    this.startDate,
+    this.endDate,
+    this.ownerId,
+    required this.accessToken,
+    this.sprints = const [],
+    this.backlog = const [],
   });
 
   factory Project.fromJson(Map<String, dynamic> json) {
     return Project(
-      id: json['id'] as String?,
-      name: json['name'] as String?,
-      description: json['description'] as String?,
+      id: json['id'],
+      name: json['name'],
+      description: json['description'],
+      status: json['status'],
+      startDate: json['start_date'] != null ? DateTime.parse(json['start_date']) : null,
+      endDate: json['end_date'] != null ? DateTime.parse(json['end_date']) : null,
+      ownerId: json['owner_id'],
+      accessToken: json['access_token'] ?? '',
       sprints: (json['sprints'] as List<dynamic>?)?.map((sprintJson) => Sprint.fromJson(sprintJson as Map<String, dynamic>)).toList() ?? [],
       backlog: (json['backlog'] as List<dynamic>?)?.map((issueJson) => Issue.fromJson(issueJson as Map<String, dynamic>)).toList() ?? [],
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'description': description,
+      'status': status,
+      'start_date': startDate?.toIso8601String(),
+      'end_date': endDate?.toIso8601String(),
+      'owner_id': ownerId,
+      'access_token': accessToken,
+      'sprints': sprints.map((sprint) => sprint.toJson()).toList(),
+      'backlog': backlog.map((issue) => issue.toJson()).toList(),
+    };
   }
 }
 
@@ -49,6 +82,16 @@ class Sprint {
           .map((issueJson) => Issue.fromJson(issueJson as Map<String, dynamic>))
           .toList(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'startDate': startDate?.toIso8601String(),
+      'endDate': endDate?.toIso8601String(),
+      'issues': issues.map((issue) => issue.toJson()).toList(),
+    };
   }
 }
 
@@ -90,5 +133,20 @@ class Issue {
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : null,
       updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt'] as String) : null,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'taskName': title,
+      'taskDescription': description,
+      'status': status,
+      'priority': priority,
+      'type': type,
+      'assignee': assignee,
+      'sprintId': sprintId,
+      'createdAt': createdAt?.toIso8601String(),
+      'updatedAt': updatedAt?.toIso8601String(),
+    };
   }
 } 
