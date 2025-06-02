@@ -104,7 +104,10 @@ class _BoardScreenState extends State<BoardScreen> {
             final dynamic tasksResponseData = json.decode(tasksResponse.body);
             if (tasksResponseData is List<dynamic>) {
               List<issue_model.Issue> allTasks = tasksResponseData.map((issueJson) {
-                return issue_model.Issue.fromJson(issueJson as Map<String, dynamic>);
+                final issue = issue_model.Issue.fromJson(issueJson as Map<String, dynamic>);
+                // Set sprintId based on our mapping
+                issue.sprintId = issueToSprintMap[issue.id];
+                return issue;
               }).toList();
 
               // Filter active sprints

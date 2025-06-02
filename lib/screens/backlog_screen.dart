@@ -412,6 +412,14 @@ class _BacklogScreenState extends State<BacklogScreen> {
                 final sprint = Sprint.fromJson(sprintJson);
                 print('Successfully created Sprint object: ${sprint.name} (${sprint.id})');
                 fetchedSprints.add(sprint);
+                // Map issues to sprint
+                if (sprintJson['issues'] != null && sprintJson['issues'] is List) {
+                  for (var issue in sprintJson['issues']) {
+                    if (issue is Map<String, dynamic> && issue['id'] != null) {
+                      issueToSprintMap[issue['id']] = sprint.id;
+                    }
+                  }
+                }
               } catch (e) {
                 print('Error creating Sprint object: $e');
                 print('Problematic sprint JSON: $sprintJson');
@@ -476,7 +484,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
                     startDate: selectedProject.startDate,
                     endDate: selectedProject.endDate,
                     ownerId: selectedProject.ownerId,
-                    accessToken: widget.accessToken, // Use the token from widget
+                    accessToken: widget.accessToken,
                     backlog: backlogIssues,
                     sprints: sprintsWithIssues,
                   );
