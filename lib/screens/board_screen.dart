@@ -373,7 +373,6 @@ class _BoardScreenState extends State<BoardScreen> {
     };
 
     for (var issue in _issues) {
-      // Map CREATED status to TO_DO column
       if (issue.status == 'CREATED') {
         issuesByStatus['TO_DO']!.add(issue);
       } else if (issuesByStatus.containsKey(issue.status)) {
@@ -386,8 +385,8 @@ class _BoardScreenState extends State<BoardScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildColumn('TO DO', issuesByStatus['TO_DO']!),
-          _buildColumn('IN PROGRESS', issuesByStatus['IN_PROGRESS']!),
+          _buildColumn('TO_DO', issuesByStatus['TO_DO']!),
+          _buildColumn('IN_PROGRESS', issuesByStatus['IN_PROGRESS']!),
           _buildColumn('REVIEW', issuesByStatus['REVIEW']!),
           _buildColumn('DONE', issuesByStatus['DONE']!),
         ],
@@ -395,95 +394,185 @@ class _BoardScreenState extends State<BoardScreen> {
     );
   }
 
-  Widget _buildColumn(String title, List<issue_model.Issue> issues) {
-    return Container(
-      width: MediaQuery.of(context).size.width * 0.8,
-      child: Card(
-        margin: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: issues.length,
-                itemBuilder: (context, index) {
-                  final issue = issues[index];
-                  return Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: ListTile(
-                      title: Text(
-                        issue.title,
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            issue.description,
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 2,
-                          ),
-                          const SizedBox(height: 4),
-                          Wrap(
-                            spacing: 8,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: _getPriorityColor(issue.priority).withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  issue.priority,
-                                  style: TextStyle(
-                                    color: _getPriorityColor(issue.priority),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: _getStatusColor(issue.status).withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  issue.type,
-                                  style: TextStyle(
-                                    color: _getStatusColor(issue.status),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      onTap: () {
-                        // TODO: Show issue details
-                      },
+  Widget _buildColumn(String status, List<issue_model.Issue> issues) {
+    return DragTarget<issue_model.Issue>(
+      onWillAccept: (issue) => issue != null,
+      onAccept: (issue) => _handleIssueDrop(issue, status),
+      builder: (context, candidateData, rejectedData) {
+        return Container(
+          width: MediaQuery.of(context).size.width * 0.8,
+          child: Card(
+            margin: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    status.replaceAll('_', ' '),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
-                  );
-                },
-              ),
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: issues.length,
+                    itemBuilder: (context, index) {
+                      final issue = issues[index];
+                      return Draggable<issue_model.Issue>(
+                        data: issue,
+                        feedback: Material(
+                          elevation: 4,
+                          child: Container(
+                            width: MediaQuery.of(context).size.width * 0.7,
+                            child: Card(
+                              child: ListTile(
+                                title: Text(issue.title),
+                                subtitle: Text(issue.description),
+                              ),
+                            ),
+                          ),
+                        ),
+                        childWhenDragging: Container(
+                          height: 0,
+                        ),
+                        child: Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          child: ListTile(
+                            title: Text(
+                              issue.title,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  issue.description,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 2,
+                                ),
+                                const SizedBox(height: 4),
+                                Wrap(
+                                  spacing: 8,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: _getPriorityColor(issue.priority).withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        issue.priority,
+                                        style: TextStyle(
+                                          color: _getPriorityColor(issue.priority),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: _getStatusColor(issue.status).withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        issue.type,
+                                        style: TextStyle(
+                                          color: _getStatusColor(issue.status),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            onTap: () {
+                              // TODO: Show issue details
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
+  }
+
+  Future<void> _handleIssueDrop(issue_model.Issue issue, String newStatus) async {
+    if (issue.status == newStatus) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/tasks/${issue.id}/status'),
+        headers: {
+          'Content-Type': 'application/json',
+          'tasks_token': widget.accessToken,
+        },
+        body: json.encode({
+          'status': newStatus,
+        }),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        // Update local state
+        setState(() {
+          final index = _issues.indexWhere((i) => i.id == issue.id);
+          if (index != -1) {
+            _issues[index] = _issues[index].copyWith(status: newStatus);
+          }
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Issue status updated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        setState(() {
+          _isLoading = false;
+          _error = 'Failed to update issue status: ${response.statusCode}';
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update issue status: ${response.statusCode}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Error updating issue status: $e';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating issue status: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Color _getStatusColor(String status) {

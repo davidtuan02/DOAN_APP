@@ -76,4 +76,42 @@ class Issue {
       'boardColumn': boardColumn,
     };
   }
+
+  Issue copyWith({
+    String? id,
+    String? title,
+    String? description,
+    String? status,
+    String? priority,
+    String? type,
+    String? sprintId,
+    Map<String, dynamic>? assignee,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    int? storyPoints,
+    List<String>? labels,
+    DateTime? startDate,
+    DateTime? dueDate,
+    Map<String, dynamic>? reporter,
+    String? boardColumn,
+  }) {
+    return Issue(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      status: status ?? this.status,
+      priority: priority ?? this.priority,
+      type: type ?? this.type,
+      assignee: assignee ?? this.assignee,
+      sprintId: sprintId ?? this.sprintId,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      storyPoints: storyPoints ?? this.storyPoints,
+      labels: labels ?? this.labels,
+      startDate: startDate ?? this.startDate,
+      dueDate: dueDate ?? this.dueDate,
+      reporter: reporter ?? this.reporter,
+      boardColumn: boardColumn ?? this.boardColumn,
+    );
+  }
 } 
