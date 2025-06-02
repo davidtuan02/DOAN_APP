@@ -3,6 +3,7 @@ import '../models/project.dart';
 import '../widgets/create_issue_form.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../config/api_config.dart';
 
 class BacklogScreen extends StatefulWidget {
   final String userId;
@@ -77,7 +78,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
   }
 
   Future<void> _updateIssueSprint(Issue issue, String? newSprintId, Sprint? toSprint) async {
-    final url = Uri.parse('http://192.168.63.1:8000/api/tasks/${issue.id}/sprint');
+    final url = Uri.parse('$baseUrl/tasks/${issue.id}/sprint');
     final headers = {
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
@@ -289,7 +290,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
   }
 
   Future<void> _updateIssue(Issue issue, String newStatus) async {
-    final url = Uri.parse('http://192.168.63.1:8000/api/tasks/${issue.id}');
+    final url = Uri.parse('$baseUrl/tasks/${issue.id}');
     final headers = {
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
@@ -380,7 +381,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
     print('Access token being used: ${widget.accessToken}');
     if (!mounted) return;
 
-    final sprintsUrl = Uri.parse('http://192.168.63.1:8000/api/sprints/project/$projectId');
+    final sprintsUrl = Uri.parse('$baseUrl/sprints/project/$projectId');
     final headers = <String, String>{
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
@@ -428,7 +429,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
           }
 
           // Fetch all tasks for the project
-          final tasksUrl = Uri.parse('http://192.168.63.1:8000/api/tasks/project/$projectId');
+          final tasksUrl = Uri.parse('$baseUrl/tasks/project/$projectId');
           print('Fetching tasks...');
           final tasksResponse = await http.get(tasksUrl, headers: headers);
           print('Tasks response status: ${tasksResponse.statusCode}');

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/board_screen.dart';
+import 'screens/board_screen.dart' as board;
 import 'screens/backlog_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/account_screen.dart';
@@ -9,7 +9,7 @@ import 'screens/projects_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'models/project.dart';
-import 'screens/board_screen.dart';
+import 'config/api_config.dart';
 
 void main() {
   runApp(const MyApp());
@@ -111,7 +111,7 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _fetchUnreadCount() async {
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.63.1:8000/api/notifications/count'),
+        Uri.parse('$baseUrl/notifications/count'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
@@ -154,7 +154,7 @@ class _MainScreenState extends State<MainScreen> {
         );
       case 1:
         if (_selectedProject != null) {
-          return BoardScreen(
+          return board.BoardScreen(
             project: _selectedProject!,
             accessToken: widget.accessToken,
           );

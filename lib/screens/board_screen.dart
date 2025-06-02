@@ -4,6 +4,10 @@ import '../models/sprint.dart' as sprint_model;
 import '../models/issue.dart' as issue_model;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../config/api_config.dart';
+
+// Global API configuration
+// const String baseUrl = 'http://192.168.63.1:8000/api';
 
 enum SprintStatus {
   planning,
@@ -53,7 +57,7 @@ class _BoardScreenState extends State<BoardScreen> {
     print('Access token being used: ${widget.accessToken}');
     if (!mounted) return;
 
-    final sprintsUrl = Uri.parse('http://192.168.63.1:8000/api/sprints/project/$projectId');
+    final sprintsUrl = Uri.parse('$baseUrl/sprints/project/$projectId');
     final headers = <String, String>{
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
@@ -101,7 +105,7 @@ class _BoardScreenState extends State<BoardScreen> {
           });
 
           // Fetch all tasks for the project
-          final tasksUrl = Uri.parse('http://192.168.63.1:8000/api/tasks/project/$projectId');
+          final tasksUrl = Uri.parse('$baseUrl/tasks/project/$projectId');
           print('Fetching tasks...');
           final tasksResponse = await http.get(tasksUrl, headers: headers);
           print('Tasks response status: ${tasksResponse.statusCode}');
@@ -160,7 +164,7 @@ class _BoardScreenState extends State<BoardScreen> {
       
       try {
         // Fetch all tasks for the project
-        final tasksUrl = Uri.parse('http://192.168.63.1:8000/api/tasks/project/${widget.project.id}');
+        final tasksUrl = Uri.parse('$baseUrl/tasks/project/${widget.project.id}');
         final headers = <String, String>{
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
@@ -177,7 +181,7 @@ class _BoardScreenState extends State<BoardScreen> {
           
           if (tasksResponseData is List<dynamic>) {
             // First, get the sprint's issues mapping
-            final sprintUrl = Uri.parse('http://192.168.63.1:8000/api/sprints/${newSprint.id}');
+            final sprintUrl = Uri.parse('$baseUrl/sprints/${newSprint.id}');
             final sprintResponse = await http.get(sprintUrl, headers: headers);
             Map<String, String> issueToSprintMap = {};
             

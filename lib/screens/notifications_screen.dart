@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../models/notification.dart' as notif_model;
+import '../config/api_config.dart';
 
 class NotificationsScreen extends StatefulWidget {
   final String accessToken;
@@ -37,7 +38,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.63.1/api/notifications'),
+        Uri.parse('$baseUrl/notifications'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
@@ -71,8 +72,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _markAsRead(String notificationId) async {
     try {
-      final response = await http.patch(
-        Uri.parse('http://192.168.63.1:8000/api/notifications/$notificationId/read'),
+      final response = await http.post(
+        Uri.parse('$baseUrl/notifications/$notificationId/read'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
@@ -106,7 +107,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.63.1:8000/api/notifications/read-all'),
+        Uri.parse('$baseUrl/notifications/read-all'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,

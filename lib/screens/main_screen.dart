@@ -6,8 +6,9 @@ import 'notifications_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'backlog_screen.dart';
-import 'board_screen.dart';
+import 'board_screen.dart' as board;
 import '../models/project.dart';
+import '../config/api_config.dart';
 
 class MainScreen extends StatefulWidget {
   final String userId;
@@ -51,13 +52,13 @@ class _MainScreenState extends State<MainScreen> {
         accessToken: widget.accessToken,
       ),
     ];
-    _fetchUnreadCount();
+    _fetchNotificationCount();
   }
 
-  Future<void> _fetchUnreadCount() async {
+  Future<void> _fetchNotificationCount() async {
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.63.1:8000/api/notifications/count'),
+        Uri.parse('$baseUrl/notifications/count'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
@@ -95,7 +96,7 @@ class _MainScreenState extends State<MainScreen> {
         );
       case 1:
         if (_selectedProject != null) {
-          return BoardScreen(
+          return board.BoardScreen(
             project: _selectedProject!,
             accessToken: widget.accessToken,
           );
@@ -127,7 +128,7 @@ class _MainScreenState extends State<MainScreen> {
       _selectedIndex = index;
     });
     if (index == 2) { // Notifications tab
-      _fetchUnreadCount();
+      _fetchNotificationCount();
     }
   }
 

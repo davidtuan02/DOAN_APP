@@ -3,6 +3,7 @@ import '../models/project.dart';
 import 'backlog_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../config/api_config.dart';
 
 class ProjectsScreen extends StatefulWidget {
   final String userId;
@@ -38,13 +39,13 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   }
 
   Future<void> _fetchProjects() async {
-    final url = Uri.parse('http://192.168.63.1:8000/api/projects/user/${widget.userId}');
-    final headers = {
-      'Content-Type': 'application/json',
-      'tasks_token': widget.accessToken,
-    };
-
     try {
+      final url = Uri.parse('$baseUrl/projects/user/${widget.userId}');
+      final headers = {
+        'Content-Type': 'application/json',
+        'tasks_token': widget.accessToken,
+      };
+
       final response = await http.get(url, headers: headers);
 
       if (!mounted) return;

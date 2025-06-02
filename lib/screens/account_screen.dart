@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../models/user.dart';
+import '../config/api_config.dart';
 
 class AccountScreen extends StatefulWidget {
   final String accessToken;
@@ -47,7 +48,7 @@ class _AccountScreenState extends State<AccountScreen> {
   Future<void> _fetchProfile() async {
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.63.1:8000/api/auth/profile'),
+        Uri.parse('$baseUrl/auth/profile'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
@@ -94,7 +95,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
       try {
         final response = await http.patch(
-          Uri.parse('http://192.168.63.1:8000/api/auth/profile'),
+          Uri.parse('$baseUrl/auth/profile'),
           headers: {
             'Content-Type': 'application/json',
             'tasks_token': widget.accessToken,
@@ -145,7 +146,7 @@ class _AccountScreenState extends State<AccountScreen> {
   Future<void> _logout() async {
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.63.1:8000/api/auth/logout'),
+        Uri.parse('$baseUrl/auth/logout'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,

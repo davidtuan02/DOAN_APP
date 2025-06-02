@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../config/api_config.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -24,7 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       try {
-        final url = Uri.parse('http://192.168.63.1:8000/api/auth/login');
+        final url = Uri.parse('$baseUrl/auth/login');
         final response = await http.post(
           url,
           headers: {'Content-Type': 'application/json'},
