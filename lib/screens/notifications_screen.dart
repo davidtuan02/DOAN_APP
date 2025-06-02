@@ -37,7 +37,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.0.100:8000/api/notifications'),
+        Uri.parse('http://192.168.63.1/api/notifications'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
@@ -72,7 +72,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _markAsRead(String notificationId) async {
     try {
       final response = await http.patch(
-        Uri.parse('http://192.168.0.100:8000/api/notifications/$notificationId/read'),
+        Uri.parse('http://192.168.63.1:8000/api/notifications/$notificationId/read'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
@@ -106,7 +106,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.100:8000/api/notifications/read-all'),
+        Uri.parse('http://192.168.63.1:8000/api/notifications/read-all'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,

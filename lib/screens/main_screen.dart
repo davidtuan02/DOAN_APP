@@ -6,6 +6,8 @@ import 'notifications_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'backlog_screen.dart';
+import 'board_screen.dart';
+import '../models/project.dart';
 
 class MainScreen extends StatefulWidget {
   final String userId;
@@ -25,12 +27,17 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   int _unreadCount = 0;
   List<Widget> _screens = [];
+  Project? _selectedProject;
 
   @override
   void initState() {
     super.initState();
     _screens = [
-      ProjectsScreen(userId: widget.userId, accessToken: widget.accessToken),
+      ProjectsScreen(
+        userId: widget.userId,
+        accessToken: widget.accessToken,
+        onProjectSelected: _handleProjectSelected,
+      ),
       const IssuesScreen(),
       NotificationsScreen(
         accessToken: widget.accessToken,
@@ -50,7 +57,7 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _fetchUnreadCount() async {
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.0.100:8000/api/notifications/count'),
+        Uri.parse('http://192.168.63.1:8000/api/notifications/count'),
         headers: {
           'Content-Type': 'application/json',
           'tasks_token': widget.accessToken,
@@ -71,6 +78,50 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  void _handleProjectSelected(Project project) {
+    setState(() {
+      _selectedProject = project;
+    });
+  }
+
+  Widget _buildScreen(int index) {
+    switch (index) {
+      case 0:
+        return ProjectsScreen(
+          userId: widget.userId,
+          accessToken: widget.accessToken,
+          onProjectSelected: _handleProjectSelected,
+          initialProject: _selectedProject,
+        );
+      case 1:
+        if (_selectedProject != null) {
+          return BoardScreen(
+            project: _selectedProject!,
+            accessToken: widget.accessToken,
+          );
+        } else {
+          return const Center(child: Text('Please select a project from the Projects tab.'));
+        }
+      case 2:
+        if (_selectedProject != null) {
+          return BacklogScreen(
+            userId: widget.userId,
+            accessToken: widget.accessToken,
+            projectId: _selectedProject!.id!,
+            projectName: _selectedProject!.name ?? 'Unnamed Project',
+          );
+        } else {
+          return const Center(child: Text('Please select a project from the Projects tab.'));
+        }
+      case 3:
+        return _screens[2];
+      case 4:
+        return _screens[3];
+      default:
+        return const SizedBox();
+    }
+  }
+
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
@@ -83,21 +134,21 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _screens,
-      ),
+      body: _buildScreen(_selectedIndex),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        items: [
+        type: BottomNavigationBarType.fixed,
+        items: <BottomNavigationBarItem>[
           const BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
+            icon: Icon(Icons.folder_open),
             label: 'Projects',
           ),
           const BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Account',
+            icon: Icon(Icons.dashboard),
+            label: 'Board',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.folder),
+            label: 'Backlog',
           ),
           BottomNavigationBarItem(
             icon: Stack(
@@ -131,7 +182,13 @@ class _MainScreenState extends State<MainScreen> {
             ),
             label: 'Notifications',
           ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Account',
+          ),
         ],
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
       ),
     );
   }

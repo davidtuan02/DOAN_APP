@@ -31,6 +31,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
     print('BacklogScreen initState called');
     print('Project ID: ${widget.projectId}');
     print('Project name: ${widget.projectName}');
+    print('Access token in initState: ${widget.accessToken}');
     
     // Initialize project with basic info
     selectedProject = Project(
@@ -41,6 +42,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
       backlog: [],
       sprints: [],
     );
+    print('Project access token: ${selectedProject.accessToken}');
     
     // Fetch project data
     _fetchSprintsAndIssues(widget.projectId);
@@ -75,7 +77,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
   }
 
   Future<void> _updateIssueSprint(Issue issue, String? newSprintId, Sprint? toSprint) async {
-    final url = Uri.parse('http://192.168.0.100:8000/api/tasks/${issue.id}/sprint');
+    final url = Uri.parse('http://192.168.63.1:8000/api/tasks/${issue.id}/sprint');
     final headers = {
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
@@ -287,7 +289,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
   }
 
   Future<void> _updateIssue(Issue issue, String newStatus) async {
-    final url = Uri.parse('http://192.168.0.100:8000/api/tasks/${issue.id}');
+    final url = Uri.parse('http://192.168.63.1:8000/api/tasks/${issue.id}');
     final headers = {
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
@@ -375,16 +377,18 @@ class _BacklogScreenState extends State<BacklogScreen> {
 
   Future<void> _fetchSprintsAndIssues(String projectId) async {
     print('Fetching sprints and issues for project: $projectId');
+    print('Access token being used: ${widget.accessToken}');
     if (!mounted) return;
 
-    final sprintsUrl = Uri.parse('http://192.168.0.100:8000/api/sprints/project/$projectId');
-    final headers = {
+    final sprintsUrl = Uri.parse('http://192.168.63.1:8000/api/sprints/project/$projectId');
+    final headers = <String, String>{
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
     };
 
     try {
-      print('Fetching sprints...');
+      print('Fetching sprints from URL: $sprintsUrl');
+      print('Using headers: $headers');
       final sprintsResponse = await http.get(sprintsUrl, headers: headers);
       print('Sprints response status: ${sprintsResponse.statusCode}');
       print('Sprints response body: ${sprintsResponse.body}');
@@ -393,26 +397,30 @@ class _BacklogScreenState extends State<BacklogScreen> {
 
       if (sprintsResponse.statusCode == 200) {
         final dynamic sprintsResponseData = json.decode(sprintsResponse.body);
+        print('Decoded sprints data: $sprintsResponseData');
 
         if (sprintsResponseData is List<dynamic>) {
+          print('Number of sprints received: ${sprintsResponseData.length}');
           List<Sprint> fetchedSprints = [];
-          Map<String, String> issueToSprintMap = {}; // Map to track which issue belongs to which sprint
+          Map<String, String> issueToSprintMap = {};
 
           // Process fetched sprints and build issue-to-sprint mapping
           for (var sprintJson in sprintsResponseData) {
+            print('Processing sprint JSON: $sprintJson');
             if (sprintJson is Map<String, dynamic>) {
-              final sprint = Sprint.fromJson(sprintJson);
-              fetchedSprints.add(sprint);
-              
-              // Map each issue in the sprint to its sprint ID
-              for (var issue in sprint.issues) {
-                issueToSprintMap[issue.id] = sprint.id;
+              try {
+                final sprint = Sprint.fromJson(sprintJson);
+                print('Successfully created Sprint object: ${sprint.name} (${sprint.id})');
+                fetchedSprints.add(sprint);
+              } catch (e) {
+                print('Error creating Sprint object: $e');
+                print('Problematic sprint JSON: $sprintJson');
               }
             }
           }
 
           // Fetch all tasks for the project
-          final tasksUrl = Uri.parse('http://192.168.0.100:8000/api/tasks/project/$projectId');
+          final tasksUrl = Uri.parse('http://192.168.63.1:8000/api/tasks/project/$projectId');
           print('Fetching tasks...');
           final tasksResponse = await http.get(tasksUrl, headers: headers);
           print('Tasks response status: ${tasksResponse.statusCode}');
@@ -468,7 +476,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
                     startDate: selectedProject.startDate,
                     endDate: selectedProject.endDate,
                     ownerId: selectedProject.ownerId,
-                    accessToken: selectedProject.accessToken,
+                    accessToken: widget.accessToken, // Use the token from widget
                     backlog: backlogIssues,
                     sprints: sprintsWithIssues,
                   );

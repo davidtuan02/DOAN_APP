@@ -13,10 +13,12 @@ enum SprintStatus {
 
 class BoardScreen extends StatefulWidget {
   final Project project;
+  final String accessToken;
 
   const BoardScreen({
     Key? key,
     required this.project,
+    required this.accessToken,
   }) : super(key: key);
 
   @override
@@ -40,12 +42,13 @@ class _BoardScreenState extends State<BoardScreen> {
 
   Future<void> _fetchSprintsAndIssues(String projectId) async {
     print('Fetching sprints and issues for project: $projectId');
+    print('Access token being used: ${widget.accessToken}');
     if (!mounted) return;
 
-    final sprintsUrl = Uri.parse('http://192.168.0.100:8000/api/sprints/project/$projectId');
-    final headers = {
+    final sprintsUrl = Uri.parse('http://192.168.63.1:8000/api/sprints/project/$projectId');
+    final headers = <String, String>{
       'Content-Type': 'application/json',
-      'tasks_token': widget.project.accessToken,
+      'tasks_token': widget.accessToken,
     };
 
     try {
@@ -66,13 +69,30 @@ class _BoardScreenState extends State<BoardScreen> {
           // Process fetched sprints
           for (var sprintJson in sprintsResponseData) {
             if (sprintJson is Map<String, dynamic>) {
-              final sprint = sprint_model.Sprint.fromJson(sprintJson);
-              fetchedSprints.add(sprint);
+              try {
+                final sprint = sprint_model.Sprint.fromJson(sprintJson);
+                fetchedSprints.add(sprint);
+                // Map issues to sprint
+                if (sprintJson['issues'] != null && sprintJson['issues'] is List) {
+                  for (var issue in sprintJson['issues']) {
+                    if (issue is Map<String, dynamic> && issue['id'] != null) {
+                      issueToSprintMap[issue['id']] = sprint.id;
+                    }
+                  }
+                }
+              } catch (e) {
+                print('Error parsing sprint: $e');
+                print('Problematic sprint JSON: $sprintJson');
+              }
             }
           }
 
+          setState(() {
+            _sprints = fetchedSprints;
+          });
+
           // Fetch all tasks for the project
-          final tasksUrl = Uri.parse('http://192.168.0.100:8000/api/tasks/project/$projectId');
+          final tasksUrl = Uri.parse('http://192.168.63.1:8000/api/tasks/project/$projectId');
           print('Fetching tasks...');
           final tasksResponse = await http.get(tasksUrl, headers: headers);
           print('Tasks response status: ${tasksResponse.statusCode}');
@@ -102,12 +122,13 @@ class _BoardScreenState extends State<BoardScreen> {
           }
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('Error fetching sprints and issues: $e');
+      print('Stack trace: $stackTrace');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to refresh data. Please try again.'),
+        SnackBar(
+          content: Text('Failed to refresh data: ${e.toString()}'),
           backgroundColor: Colors.red,
         ),
       );

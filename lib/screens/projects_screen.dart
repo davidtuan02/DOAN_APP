@@ -38,7 +38,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   }
 
   Future<void> _fetchProjects() async {
-    final url = Uri.parse('http://192.168.0.100:8000/api/projects/user/${widget.userId}');
+    final url = Uri.parse('http://192.168.63.1:8000/api/projects/user/${widget.userId}');
     final headers = {
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
@@ -78,6 +78,15 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       }
     } catch (e) {
       print('Error fetching projects: $e');
+    }
+  }
+
+  void _handleProjectSelected(Project project) {
+    setState(() {
+      selectedProjectId = project.id;
+    });
+    if (widget.onProjectSelected != null) {
+      widget.onProjectSelected!(project);
     }
   }
 
@@ -174,9 +183,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                                   selectedProjectId = newValue.id;
                                   selectedProjectName = newValue.name;
                                 });
-                                if (widget.onProjectSelected != null) {
-                                  widget.onProjectSelected!(newValue);
-                                }
+                                _handleProjectSelected(newValue);
                               }
                             },
                           ),
