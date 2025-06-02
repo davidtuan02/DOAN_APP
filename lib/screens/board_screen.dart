@@ -85,6 +85,7 @@ class _BoardScreenState extends State<BoardScreen> {
                   for (var issue in sprintJson['issues']) {
                     if (issue is Map<String, dynamic> && issue['id'] != null) {
                       issueToSprintMap[issue['id']] = sprint.id;
+                      print('Mapped issue ${issue['id']} to sprint ${sprint.id}');
                     }
                   }
                 }
@@ -115,6 +116,7 @@ class _BoardScreenState extends State<BoardScreen> {
                 final issue = issue_model.Issue.fromJson(issueJson as Map<String, dynamic>);
                 // Set sprintId based on our mapping
                 issue.sprintId = issueToSprintMap[issue.id];
+                print('Issue ${issue.id} mapped to sprint ${issue.sprintId}');
                 return issue;
               }).toList();
 
@@ -127,6 +129,8 @@ class _BoardScreenState extends State<BoardScreen> {
                 setState(() {
                   _selectedSprint = activeSprints.first;
                   _issues = allTasks.where((issue) => issue.sprintId == _selectedSprint?.id).toList();
+                  print('Selected sprint: ${_selectedSprint?.id}');
+                  print('Found ${_issues.length} issues for selected sprint');
                 });
               }
             }
@@ -172,10 +176,29 @@ class _BoardScreenState extends State<BoardScreen> {
           print('Raw tasks response: $tasksResponseData');
           
           if (tasksResponseData is List<dynamic>) {
+            // First, get the sprint's issues mapping
+            final sprintUrl = Uri.parse('http://192.168.63.1:8000/api/sprints/${newSprint.id}');
+            final sprintResponse = await http.get(sprintUrl, headers: headers);
+            Map<String, String> issueToSprintMap = {};
+            
+            if (sprintResponse.statusCode == 200) {
+              final sprintData = json.decode(sprintResponse.body);
+              if (sprintData['issues'] != null && sprintData['issues'] is List) {
+                for (var issue in sprintData['issues']) {
+                  if (issue is Map<String, dynamic> && issue['id'] != null) {
+                    issueToSprintMap[issue['id']] = newSprint.id;
+                    print('Mapped issue ${issue['id']} to sprint ${newSprint.id}');
+                  }
+                }
+              }
+            }
+
             List<issue_model.Issue> allTasks = tasksResponseData.map((issueJson) {
               print('Processing issue: $issueJson');
               final issue = issue_model.Issue.fromJson(issueJson as Map<String, dynamic>);
-              print('Issue sprintId: ${issue.sprintId}, Selected sprint: ${newSprint.id}');
+              // Set sprintId based on our mapping
+              issue.sprintId = issueToSprintMap[issue.id];
+              print('Issue ${issue.id} mapped to sprint ${issue.sprintId}');
               return issue;
             }).toList();
 
