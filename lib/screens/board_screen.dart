@@ -40,6 +40,14 @@ class _BoardScreenState extends State<BoardScreen> {
     }
   }
 
+  @override
+  void didUpdateWidget(BoardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.project.id != oldWidget.project.id) {
+      _fetchSprintsAndIssues(widget.project.id!);
+    }
+  }
+
   Future<void> _fetchSprintsAndIssues(String projectId) async {
     print('Fetching sprints and issues for project: $projectId');
     print('Access token being used: ${widget.accessToken}');
@@ -138,12 +146,77 @@ class _BoardScreenState extends State<BoardScreen> {
     }
   }
 
-  void _handleSprintChanged(sprint_model.Sprint? newSprint) {
+  void _handleSprintChanged(sprint_model.Sprint? newSprint) async {
     if (newSprint != null) {
       setState(() {
         _selectedSprint = newSprint;
+        _isLoading = true;
+        _issues = []; // Clear current issues
       });
-      _fetchSprintsAndIssues(widget.project.id!);
+      
+      try {
+        // Fetch all tasks for the project
+        final tasksUrl = Uri.parse('http://192.168.63.1:8000/api/tasks/project/${widget.project.id}');
+        final headers = <String, String>{
+          'Content-Type': 'application/json',
+          'tasks_token': widget.accessToken,
+        };
+
+        print('Fetching tasks for sprint: ${newSprint.id}');
+        print('Sprint name: ${newSprint.name}');
+        final tasksResponse = await http.get(tasksUrl, headers: headers);
+        if (!mounted) return;
+
+        if (tasksResponse.statusCode == 200) {
+          final dynamic tasksResponseData = json.decode(tasksResponse.body);
+          print('Raw tasks response: $tasksResponseData');
+          
+          if (tasksResponseData is List<dynamic>) {
+            List<issue_model.Issue> allTasks = tasksResponseData.map((issueJson) {
+              print('Processing issue: $issueJson');
+              final issue = issue_model.Issue.fromJson(issueJson as Map<String, dynamic>);
+              print('Issue sprintId: ${issue.sprintId}, Selected sprint: ${newSprint.id}');
+              return issue;
+            }).toList();
+
+            // Filter tasks for the selected sprint
+            final sprintTasks = allTasks.where((issue) {
+              final matches = issue.sprintId == newSprint.id;
+              print('Issue ${issue.id} - sprintId: ${issue.sprintId}, matches: $matches');
+              return matches;
+            }).toList();
+            
+            print('Found ${sprintTasks.length} tasks for sprint ${newSprint.id}');
+            print('Sprint tasks: ${sprintTasks.map((t) => '${t.id}: ${t.title}').join('\n')}');
+
+            setState(() {
+              _issues = sprintTasks;
+              _isLoading = false;
+              _error = null;
+            });
+          }
+        } else {
+          print('Failed to load tasks: ${tasksResponse.statusCode}');
+          print('Response body: ${tasksResponse.body}');
+          setState(() {
+            _error = 'Failed to load tasks: ${tasksResponse.statusCode}';
+            _isLoading = false;
+          });
+        }
+      } catch (e) {
+        print('Error fetching tasks: $e');
+        if (!mounted) return;
+        setState(() {
+          _error = 'Failed to load tasks: ${e.toString()}';
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load tasks: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -230,9 +303,7 @@ class _BoardScreenState extends State<BoardScreen> {
                             Text(_error!, style: const TextStyle(color: Colors.red)),
                             const SizedBox(height: 16),
                             ElevatedButton(
-                              onPressed: () {
-                                _fetchSprintsAndIssues(widget.project.id!);
-                              },
+                              onPressed: () => _handleSprintChanged(_selectedSprint),
                               child: const Text('Retry'),
                             ),
                           ],
@@ -246,33 +317,60 @@ class _BoardScreenState extends State<BoardScreen> {
   }
 
   Widget _buildBoard() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_error!, style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => _handleSprintChanged(_selectedSprint),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
     // Group issues by status
     final Map<String, List<issue_model.Issue>> issuesByStatus = {
-      'CREATED': [],
+      'TO_DO': [],
       'IN_PROGRESS': [],
       'REVIEW': [],
       'DONE': [],
     };
 
     for (var issue in _issues) {
-      if (issuesByStatus.containsKey(issue.status)) {
+      // Map CREATED status to TO_DO column
+      if (issue.status == 'CREATED') {
+        issuesByStatus['TO_DO']!.add(issue);
+      } else if (issuesByStatus.containsKey(issue.status)) {
         issuesByStatus[issue.status]!.add(issue);
       }
     }
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildColumn('Created', issuesByStatus['CREATED']!),
-        _buildColumn('In Progress', issuesByStatus['IN_PROGRESS']!),
-        _buildColumn('Review', issuesByStatus['REVIEW']!),
-        _buildColumn('Done', issuesByStatus['DONE']!),
-      ],
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildColumn('TO DO', issuesByStatus['TO_DO']!),
+          _buildColumn('IN PROGRESS', issuesByStatus['IN_PROGRESS']!),
+          _buildColumn('REVIEW', issuesByStatus['REVIEW']!),
+          _buildColumn('DONE', issuesByStatus['DONE']!),
+        ],
+      ),
     );
   }
 
   Widget _buildColumn(String title, List<issue_model.Issue> issues) {
-    return Expanded(
+    return Container(
+      width: MediaQuery.of(context).size.width * 0.8,
       child: Card(
         margin: const EdgeInsets.all(8),
         child: Column(
@@ -296,23 +394,60 @@ class _BoardScreenState extends State<BoardScreen> {
                   return Card(
                     margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     child: ListTile(
-                      title: Text(issue.title),
-                      subtitle: Text(issue.description),
-                      trailing: PopupMenuButton<String>(
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Text('Edit'),
+                      title: Text(
+                        issue.title,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            issue.description,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
                           ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Text('Delete'),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _getPriorityColor(issue.priority).withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  issue.priority,
+                                  style: TextStyle(
+                                    color: _getPriorityColor(issue.priority),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _getStatusColor(issue.status).withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  issue.type,
+                                  style: TextStyle(
+                                    color: _getStatusColor(issue.status),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
-                        onSelected: (value) {
-                          // TODO: Handle edit/delete
-                        },
                       ),
+                      onTap: () {
+                        // TODO: Show issue details
+                      },
                     ),
                   );
                 },
@@ -322,5 +457,36 @@ class _BoardScreenState extends State<BoardScreen> {
         ),
       ),
     );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'CREATED':
+      case 'TO_DO':
+        return Colors.blue.shade100;
+      case 'IN_PROGRESS':
+        return Colors.orange.shade100;
+      case 'REVIEW':
+        return Colors.purple.shade100;
+      case 'DONE':
+        return Colors.green.shade100;
+      default:
+        return Colors.grey.shade300;
+    }
+  }
+
+  Color _getPriorityColor(String priority) {
+    switch (priority) {
+      case 'HIGHEST':
+        return Colors.red.shade100;
+      case 'HIGH':
+        return Colors.red.shade100;
+      case 'Medium':
+        return Colors.orange.shade100;
+      case 'Low':
+        return Colors.green.shade100;
+      default:
+        return Colors.grey.shade300;
+    }
   }
 } 
