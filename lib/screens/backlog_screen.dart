@@ -508,6 +508,134 @@ class _BacklogScreenState extends State<BacklogScreen> {
     }
   }
 
+  void _showAddIssueDialog(BuildContext context, {String? sprintId}) {
+    final formKey = GlobalKey<FormState>();
+    String name = '';
+    String type = 'Task';
+    String priority = 'Medium';
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(sprintId != null ? 'Add Issue to Sprint' : 'Add Issue to Backlog'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    decoration: const InputDecoration(
+                      labelText: 'Name',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter a name';
+                      }
+                      return null;
+                    },
+                    onSaved: (value) => name = value!,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'Type',
+                      border: OutlineInputBorder(),
+                    ),
+                    value: type,
+                    items: const [
+                      DropdownMenuItem(value: 'Epic', child: Text('Epic')),
+                      DropdownMenuItem(value: 'Story', child: Text('Story')),
+                      DropdownMenuItem(value: 'Task', child: Text('Task')),
+                      DropdownMenuItem(value: 'Bug', child: Text('Bug')),
+                    ],
+                    onChanged: (value) {
+                      type = value!;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'Priority',
+                      border: OutlineInputBorder(),
+                    ),
+                    value: priority,
+                    items: const [
+                      DropdownMenuItem(value: 'Highest', child: Text('Highest')),
+                      DropdownMenuItem(value: 'High', child: Text('High')),
+                      DropdownMenuItem(value: 'Medium', child: Text('Medium')),
+                      DropdownMenuItem(value: 'Low', child: Text('Low')),
+                      DropdownMenuItem(value: 'Lowest', child: Text('Lowest')),
+                    ],
+                    onChanged: (value) {
+                      priority = value!;
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (formKey.currentState!.validate()) {
+                  formKey.currentState!.save();
+                  
+                  try {
+                    final response = await http.post(
+                      Uri.parse('$baseUrl/tasks'),
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'tasks_token': widget.accessToken,
+                      },
+                      body: json.encode({
+                        'title': name,
+                        'type': type,
+                        'priority': priority,
+                        'status': 'CREATED',
+                        'projectId': widget.projectId,
+                        if (sprintId != null) 'sprintId': sprintId,
+                      }),
+                    );
+
+                    if (response.statusCode == 201) {
+                      if (!mounted) return;
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Issue created successfully'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                      _fetchSprintsAndIssues(widget.projectId);
+                    } else {
+                      throw Exception('Failed to create issue');
+                    }
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error creating issue: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Create'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     print('BacklogScreen build called');
@@ -520,6 +648,12 @@ class _BacklogScreenState extends State<BacklogScreen> {
         title: Text(selectedProject.name ?? 'Backlog'),
         elevation: 2,
         backgroundColor: Theme.of(context).primaryColor,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => _fetchSprintsAndIssues(widget.projectId),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Padding(
@@ -554,9 +688,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
                             ),
                           ),
                           TextButton.icon(
-                            onPressed: () {
-                              _showCreateIssueDialog(context, null);
-                            },
+                            onPressed: () => _showAddIssueDialog(context),
                             icon: const Icon(Icons.add),
                             label: const Text('Create Issue'),
                           ),
@@ -632,9 +764,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
                               ),
                             ),
                             TextButton.icon(
-                              onPressed: () {
-                                _showCreateIssueDialog(context, sprint);
-                              },
+                              onPressed: () => _showAddIssueDialog(context, sprintId: sprint.id),
                               icon: const Icon(Icons.add),
                               label: const Text('Create Issue'),
                             ),
@@ -671,6 +801,10 @@ class _BacklogScreenState extends State<BacklogScreen> {
             ],
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showAddIssueDialog(context),
+        child: const Icon(Icons.add),
       ),
     );
   }
