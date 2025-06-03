@@ -377,6 +377,22 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                                               itemCount: _projectMembers.length,
                                               itemBuilder: (context, index) {
                                                 final member = _projectMembers[index];
+                                                String roleText = 'MEMBER';
+                                                if (member.accessLevel != null) {
+                                                  switch (member.accessLevel) {
+                                                    case 3:
+                                                      roleText = 'MANAGER';
+                                                      break;
+                                                    case 2:
+                                                      roleText = 'LEADER';
+                                                      break;
+                                                    case 1:
+                                                      roleText = 'MEMBER';
+                                                      break;
+                                                    default:
+                                                      roleText = 'MEMBER';
+                                                  }
+                                                }
                                                 return Card(
                                                   margin: const EdgeInsets.only(bottom: 8),
                                                   child: ListTile(
@@ -398,7 +414,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                                                       children: [
                                                         if (member.userEmail != null && member.userEmail!.isNotEmpty)
                                                           Text(member.userEmail!),
-                                                        Text('Access Level: ${member.accessLevel ?? 'N/A'}'),
+                                                        Text('Role: $roleText'),
                                                       ],
                                                     ),
                                                     trailing: Text(

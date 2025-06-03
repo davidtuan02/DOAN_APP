@@ -28,7 +28,7 @@ class _AccountScreenState extends State<AccountScreen> {
   String _email = '';
   String _username = '';
   int _age = 0;
-  String _role = '';
+  UserRole _role = UserRole.MEMBER;
 
   @override
   void initState() {
@@ -64,11 +64,15 @@ class _AccountScreenState extends State<AccountScreen> {
           _email = data['email'] ?? '';
           _username = data['username'] ?? '';
           _age = data['age'] ?? 0;
-          _role = data['role'] ?? '';
+          final roleStr = data['role'] as String?;
+          _role = roleStr == null ? UserRole.MEMBER : 
+                 roleStr.toUpperCase() == 'MANAGER' ? UserRole.MANAGER :
+                 roleStr.toUpperCase() == 'LEADER' ? UserRole.LEADER :
+                 UserRole.MEMBER;
           _emailController.text = _email;
           _usernameController.text = _username;
           _ageController.text = _age.toString();
-          _roleController.text = _role;
+          _roleController.text = _role.toString().split('.').last;
           isLoading = false;
         });
       } else {
@@ -280,20 +284,14 @@ class _AccountScreenState extends State<AccountScreen> {
                         children: [
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: isLoading ? null : _updateProfile,
-                              child: isLoading
-                                  ? const CircularProgressIndicator()
-                                  : const Text('Save'),
+                              onPressed: _updateProfile,
+                              child: const Text('Save'),
                             ),
                           ),
                           const SizedBox(width: 16.0),
                           Expanded(
-                            child: ElevatedButton(
+                            child: OutlinedButton(
                               onPressed: _toggleEditMode,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.grey,
-                                foregroundColor: Colors.white,
-                              ),
                               child: const Text('Cancel'),
                             ),
                           ),
