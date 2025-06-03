@@ -333,6 +333,21 @@ class _BoardScreenState extends State<BoardScreen> {
                       child: const Text('Complete Sprint'),
                     ),
                   ),
+                // Start Sprint Button (visible only for planning sprints)
+                if (_selectedSprint != null && _selectedSprint!.status.toLowerCase() == 'planning')
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8.0),
+                    child: ElevatedButton(
+                      onPressed: () {
+                        _showStartSprintDialog(context, _selectedSprint!);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Start Sprint'),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -683,6 +698,94 @@ class _BoardScreenState extends State<BoardScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error completing sprint: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showStartSprintDialog(BuildContext context, sprint_model.Sprint sprint) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Start Sprint: ${sprint.name}'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                Text('Goal: ${sprint.goal ?? "No goal set"}'),
+                const SizedBox(height: 16),
+                Text('Total Tasks: ${sprint.issues.length}'),
+                const SizedBox(height: 16),
+                const Text('Starting this sprint will make it active and allow task movement.'),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Start'),
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _startSprint(sprint.id);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _startSprint(String sprintId) async {
+    print('Attempting to start sprint: $sprintId');
+    final url = Uri.parse('$baseUrl/sprints/$sprintId/start');
+    final headers = {
+      'Content-Type': 'application/json',
+      'tasks_token': widget.accessToken,
+    };
+
+    try {
+      final response = await http.put(
+        url,
+        headers: headers,
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        print('Successfully started sprint via API');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sprint started successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _fetchSprintsAndIssues(widget.project.id!);
+      } else {
+        print('Failed to start sprint: ${response.statusCode}');
+        print('Response body: ${response.body}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to start sprint: ${response.statusCode}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error starting sprint: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error starting sprint: ${e.toString()}'),
           backgroundColor: Colors.red,
         ),
       );
