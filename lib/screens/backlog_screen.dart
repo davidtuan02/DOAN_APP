@@ -513,6 +513,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
     String name = '';
     String type = 'Task';
     String priority = 'Medium';
+    String status = 'CREATED';
 
     showDialog(
       context: context,
@@ -573,6 +574,23 @@ class _BacklogScreenState extends State<BacklogScreen> {
                       priority = value!;
                     },
                   ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'Status',
+                      border: OutlineInputBorder(),
+                    ),
+                    value: status,
+                    items: const [
+                      DropdownMenuItem(value: 'CREATED', child: Text('Created')),
+                      DropdownMenuItem(value: 'IN_PROGRESS', child: Text('In Progress')),
+                      DropdownMenuItem(value: 'REVIEW', child: Text('Review')),
+                      DropdownMenuItem(value: 'DONE', child: Text('Done')),
+                    ],
+                    onChanged: (value) {
+                      status = value!;
+                    },
+                  ),
                 ],
               ),
             ),
@@ -584,39 +602,65 @@ class _BacklogScreenState extends State<BacklogScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
+                print('Create button pressed');
                 if (formKey.currentState!.validate()) {
                   formKey.currentState!.save();
                   
                   try {
-                    final response = await http.post(
-                      Uri.parse('$baseUrl/tasks'),
+                    // Step 1: Create the issue
+                    final requestBody = json.encode({
+                      'taskName': name,
+                      'priority': priority,
+                      'status': status,
+                      'type': type,
+                      'taskDescription': ' ',
+                      'reporterId': widget.userId,
+                    });
+                    print('Create Issue Request Body: $requestBody');
+
+                    final createResponse = await http.post(
+                      Uri.parse('$baseUrl/tasks/create/${widget.projectId}'),
                       headers: {
                         'Content-Type': 'application/json',
                         'tasks_token': widget.accessToken,
                       },
-                      body: json.encode({
-                        'title': name,
-                        'type': type,
-                        'priority': priority,
-                        'status': 'CREATED',
-                        'projectId': widget.projectId,
-                        if (sprintId != null) 'sprintId': sprintId,
-                      }),
+                      body: requestBody,
                     );
 
-                    if (response.statusCode == 201) {
-                      if (!mounted) return;
-                      Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Issue created successfully'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                      _fetchSprintsAndIssues(widget.projectId);
-                    } else {
-                      throw Exception('Failed to create issue');
+                    if (createResponse.statusCode != 201) {
+                      throw Exception('Failed to create issue: ${createResponse.statusCode}');
                     }
+
+                    final createdIssue = json.decode(createResponse.body);
+                    final issueId = createdIssue['id'];
+
+                    // Step 2: Add to sprint if sprintId is provided
+                    if (sprintId != null) {
+                      final sprintResponse = await http.put(
+                        Uri.parse('$baseUrl/tasks/$issueId/sprint'),
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'tasks_token': widget.accessToken,
+                        },
+                        body: json.encode({
+                          'sprintId': sprintId,
+                        }),
+                      );
+
+                      if (sprintResponse.statusCode != 200) {
+                        throw Exception('Failed to add issue to sprint: ${sprintResponse.statusCode}');
+                      }
+                    }
+
+                    if (!mounted) return;
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Issue created successfully'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                    _fetchSprintsAndIssues(widget.projectId);
                   } catch (e) {
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
