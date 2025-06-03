@@ -385,16 +385,16 @@ class _BoardScreenState extends State<BoardScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildColumn('TO_DO', issuesByStatus['TO_DO']!),
-          _buildColumn('IN_PROGRESS', issuesByStatus['IN_PROGRESS']!),
-          _buildColumn('REVIEW', issuesByStatus['REVIEW']!),
-          _buildColumn('DONE', issuesByStatus['DONE']!),
+          _buildColumn('TO DO', issuesByStatus['TO_DO']!, 'CREATED'),
+          _buildColumn('IN PROGRESS', issuesByStatus['IN_PROGRESS']!, 'IN_PROGRESS'),
+          _buildColumn('REVIEW', issuesByStatus['REVIEW']!, 'REVIEW'),
+          _buildColumn('DONE', issuesByStatus['DONE']!, 'DONE'),
         ],
       ),
     );
   }
 
-  Widget _buildColumn(String status, List<issue_model.Issue> issues) {
+  Widget _buildColumn(String title, List<issue_model.Issue> issues, String status) {
     return DragTarget<issue_model.Issue>(
       onWillAccept: (issue) => issue != null,
       onAccept: (issue) => _handleIssueDrop(issue, status),
@@ -409,7 +409,7 @@ class _BoardScreenState extends State<BoardScreen> {
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Text(
-                    status.replaceAll('_', ' '),
+                    title,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -510,35 +510,51 @@ class _BoardScreenState extends State<BoardScreen> {
   }
 
   Future<void> _handleIssueDrop(issue_model.Issue issue, String newStatus) async {
-    if (issue.status == newStatus) return;
+    if (issue.status == newStatus) {
+      print('Issue ${issue.id} already in status $newStatus. No update needed.');
+      return;
+    }
+
+    print('Attempting to update status for Issue ${issue.id} to $newStatus');
 
     setState(() {
-      _isLoading = true;
+      // Optional: Show a loading indicator or temporarily move the issue in the UI
+      // This requires more complex state management and might be added later if needed.
+      // For now, we rely on the full refresh after the API call.
     });
 
     try {
+      // Use the general update issue endpoint
+      final url = Uri.parse('$baseUrl/tasks/${issue.id}');
+      final headers = {
+        'Content-Type': 'application/json',
+        'tasks_token': widget.accessToken,
+      };
+
+      // Create an updated issue object with the new status
+      final updatedIssue = issue.copyWith(status: newStatus);
+
+      final body = json.encode(updatedIssue.toJson());
+
+      print('PUT Request URL: $url');
+      print('Request Headers: $headers');
+      print('Request Body: $body');
+
       final response = await http.put(
-        Uri.parse('$baseUrl/tasks/${issue.id}/status'),
-        headers: {
-          'Content-Type': 'application/json',
-          'tasks_token': widget.accessToken,
-        },
-        body: json.encode({
-          'status': newStatus,
-        }),
+        url,
+        headers: headers,
+        body: body,
       );
+
+      print('Response Status Code: ${response.statusCode}');
+      print('Response Body: ${response.body}');
 
       if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        // Update local state
-        setState(() {
-          final index = _issues.indexWhere((i) => i.id == issue.id);
-          if (index != -1) {
-            _issues[index] = _issues[index].copyWith(status: newStatus);
-          }
-          _isLoading = false;
-        });
+      if (response.statusCode == 200 || response.statusCode == 201) { // Check for 200 or 201
+        print('Issue status updated successfully on server');
+        // Refresh the entire list to ensure UI consistency
+        _handleSprintChanged(_selectedSprint); // Re-fetch and filter issues for the current sprint
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -547,31 +563,29 @@ class _BoardScreenState extends State<BoardScreen> {
           ),
         );
       } else {
-        setState(() {
-          _isLoading = false;
-          _error = 'Failed to update issue status: ${response.statusCode}';
-        });
-
+        print('Failed to update issue status: ${response.statusCode}');
+        print('Response body: ${response.body}');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to update issue status: ${response.statusCode}'),
+            content: Text('Failed to update issue status: ${response.statusCode}. ${response.body}'),
             backgroundColor: Colors.red,
           ),
         );
+        // If update failed, you might want to revert the UI change if you implemented one
       }
     } catch (e) {
+      print('Error updating issue status: $e');
       if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _error = 'Error updating issue status: $e';
-      });
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error updating issue status: $e'),
+          content: Text('Error updating issue status: ${e.toString()}'),
           backgroundColor: Colors.red,
         ),
       );
+      // If update failed, you might want to revert the UI change if you implemented one
+    } finally {
+       // Optional: Hide loading indicator
+       // setState(() { _isLoading = false; }); // Ensure this is handled correctly with _handleSprintChanged loading
     }
   }
 
