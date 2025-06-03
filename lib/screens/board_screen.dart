@@ -287,35 +287,53 @@ class _BoardScreenState extends State<BoardScreen> {
       ),
       body: Column(
         children: [
-          // Sprint Selector
+          // Sprint Selector and Actions
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<sprint_model.Sprint>(
-                  value: _selectedSprint,
-                  isExpanded: true,
-                  icon: const Icon(Icons.arrow_drop_down),
-                  hint: const Text('Select a sprint'),
-                  items: _sprints.map((sprint) {
-                    return DropdownMenuItem<sprint_model.Sprint>(
-                      value: sprint,
-                      child: Text(
-                        sprint.name,
-                        style: const TextStyle(
-                          fontSize: 16,
-                        ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<sprint_model.Sprint>(
+                        value: _selectedSprint,
+                        isExpanded: true,
+                        icon: const Icon(Icons.arrow_drop_down),
+                        hint: const Text('Select a sprint'),
+                        items: _sprints.map((sprint) {
+                          return DropdownMenuItem<sprint_model.Sprint>(
+                            value: sprint,
+                            child: Text(
+                              sprint.name,
+                              style: const TextStyle(
+                                fontSize: 16,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: _handleSprintChanged,
                       ),
-                    );
-                  }).toList(),
-                  onChanged: _handleSprintChanged,
+                    ),
+                  ),
                 ),
-              ),
+                // Complete Sprint Button (visible only for active sprints)
+                if (_selectedSprint != null && _selectedSprint!.status.toLowerCase() == 'active')
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8.0),
+                    child: ElevatedButton(
+                      onPressed: () {
+                        _showCompleteSprintDialog(context, _selectedSprint!);
+                      },
+                      child: const Text('Complete Sprint'),
+                    ),
+                  ),
+              ],
             ),
           ),
           // Board Content
@@ -429,8 +447,8 @@ class _BoardScreenState extends State<BoardScreen> {
                             width: MediaQuery.of(context).size.width * 0.7,
                             child: Card(
                               child: ListTile(
-                                title: Text(issue.title),
-                                subtitle: Text(issue.description),
+                                title: Text(issue.title ?? ''),
+                                subtitle: Text(issue.description ?? ''),
                               ),
                             ),
                           ),
@@ -442,7 +460,7 @@ class _BoardScreenState extends State<BoardScreen> {
                           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           child: ListTile(
                             title: Text(
-                              issue.title,
+                              issue.title ?? '',
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
                             ),
@@ -450,7 +468,7 @@ class _BoardScreenState extends State<BoardScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  issue.description,
+                                  issue.description ?? '',
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 2,
                                 ),
@@ -461,13 +479,13 @@ class _BoardScreenState extends State<BoardScreen> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: _getPriorityColor(issue.priority).withOpacity(0.2),
+                                        color: _getPriorityColor(issue.priority ?? '').withOpacity(0.2),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(
-                                        issue.priority,
+                                        issue.priority ?? '',
                                         style: TextStyle(
-                                          color: _getPriorityColor(issue.priority),
+                                          color: _getPriorityColor(issue.priority ?? ''),
                                           fontSize: 12,
                                           fontWeight: FontWeight.w500,
                                         ),
@@ -476,13 +494,13 @@ class _BoardScreenState extends State<BoardScreen> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: _getStatusColor(issue.status).withOpacity(0.2),
+                                        color: _getStatusColor(issue.status ?? '').withOpacity(0.2),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(
-                                        issue.type,
+                                        issue.type ?? '',
                                         style: TextStyle(
-                                          color: _getStatusColor(issue.status),
+                                          color: _getStatusColor(issue.status ?? ''),
                                           fontSize: 12,
                                           fontWeight: FontWeight.w500,
                                         ),
@@ -509,90 +527,150 @@ class _BoardScreenState extends State<BoardScreen> {
     );
   }
 
-  Future<void> _handleIssueDrop(issue_model.Issue issue, String newStatus) async {
-    if (issue.status == newStatus) {
-      print('Issue ${issue.id} already in status $newStatus. No update needed.');
-      return;
-    }
-
-    print('Attempting to update status for Issue ${issue.id} to $newStatus');
-
-    setState(() {
-      // Optional: Show a loading indicator or temporarily move the issue in the UI
-      // This requires more complex state management and might be added later if needed.
-      // For now, we rely on the full refresh after the API call.
-    });
-
+  Future<void> _handleIssueDrop(issue_model.Issue issue, String targetStatus) async {
+    print('Issue ${issue.id} dropped into column with status: $targetStatus');
+    // Update status via API
     try {
-      // Use the general update issue endpoint
-      final url = Uri.parse('$baseUrl/tasks/${issue.id}');
-      final headers = {
-        'Content-Type': 'application/json',
-        'tasks_token': widget.accessToken,
-      };
-
-      // Create an updated issue object with the new status
-      final updatedIssue = issue.copyWith(status: newStatus);
-
-      final body = json.encode(updatedIssue.toJson());
-
-      print('PUT Request URL: $url');
-      print('Request Headers: $headers');
-      print('Request Body: $body');
-
-      final response = await http.put(
-        url,
-        headers: headers,
-        body: body,
-      );
-
-      print('Response Status Code: ${response.statusCode}');
-      print('Response Body: ${response.body}');
-
-      if (!mounted) return;
-
-      if (response.statusCode == 200 || response.statusCode == 201) { // Check for 200 or 201
-        print('Issue status updated successfully on server');
-        // Refresh the entire list to ensure UI consistency
-        _handleSprintChanged(_selectedSprint); // Re-fetch and filter issues for the current sprint
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Issue status updated successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
+      await _updateIssueStatus(issue, targetStatus);
+      // Refresh issues after successful update
+      if (_selectedSprint != null) {
+        _handleSprintChanged(_selectedSprint!);
       } else {
-        print('Failed to update issue status: ${response.statusCode}');
-        print('Response body: ${response.body}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update issue status: ${response.statusCode}. ${response.body}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        // If update failed, you might want to revert the UI change if you implemented one
+        // Handle case where no sprint is selected? Maybe this shouldn't happen on the Board screen.
+        // If issues are shown without a selected sprint, we might need a different refresh logic.
       }
     } catch (e) {
       print('Error updating issue status: $e');
+      // Optionally show a snackbar or revert UI change
+    }
+  }
+
+  Future<void> _updateIssueStatus(issue_model.Issue issue, String newStatus) async {
+    final url = Uri.parse('$baseUrl/tasks/${issue.id}');
+    final headers = {
+      'Content-Type': 'application/json',
+      'tasks_token': widget.accessToken,
+    };
+
+    try {
+      final response = await http.put(
+        url,
+        headers: headers,
+        body: json.encode({
+          'status': newStatus,
+        }),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        print('Successfully updated issue status');
+        // Update local issue status immediately for better responsiveness
+        setState(() {
+          issue.status = newStatus; // Assuming issue.status is not final
+        });
+      } else {
+        print('Failed to update issue status: ${response.statusCode}');
+        print('Response body: ${response.body}');
+        throw Exception('Failed to update issue status: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error updating issue status API: $e');
+      rethrow; // Re-throw to be caught by _handleIssueDrop
+    }
+  }
+
+  void _showCompleteSprintDialog(BuildContext context, sprint_model.Sprint sprint) {
+    final completedTasks = sprint.issues.where((issue) => issue.status == 'DONE').length;
+    final incompleteTasks = sprint.issues.length - completedTasks;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Complete Sprint: ${sprint.name}'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                Text('Goal: ${sprint.goal ?? "No goal set"}'),
+                const SizedBox(height: 16),
+                Text('Completed Tasks: $completedTasks'),
+                Text('Incomplete Tasks: $incompleteTasks'),
+                const SizedBox(height: 16),
+                const Text('Completing this sprint will move incomplete issues to the backlog.'),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            ElevatedButton(
+              child: const Text('Complete'),
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _completeSprint(sprint.id);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _completeSprint(String sprintId) async {
+    print('Attempting to complete sprint: $sprintId');
+    final url = Uri.parse('$baseUrl/sprints/$sprintId/complete');
+    final headers = {
+      'Content-Type': 'application/json',
+      'tasks_token': widget.accessToken,
+    };
+
+    try {
+      final response = await http.put(
+        url,
+        headers: headers,
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        print('Successfully completed sprint via API');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sprint completed successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _fetchSprintsAndIssues(widget.project.id!);
+      } else {
+        print('Failed to complete sprint: ${response.statusCode}');
+        print('Response body: ${response.body}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to complete sprint: ${response.statusCode}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error completing sprint: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error updating issue status: ${e.toString()}'),
+          content: Text('Error completing sprint: ${e.toString()}'),
           backgroundColor: Colors.red,
         ),
       );
-      // If update failed, you might want to revert the UI change if you implemented one
-    } finally {
-       // Optional: Hide loading indicator
-       // setState(() { _isLoading = false; }); // Ensure this is handled correctly with _handleSprintChanged loading
     }
   }
 
   Color _getStatusColor(String status) {
     switch (status) {
       case 'CREATED':
-      case 'TO_DO':
         return Colors.blue.shade100;
       case 'IN_PROGRESS':
         return Colors.orange.shade100;
@@ -607,14 +685,16 @@ class _BoardScreenState extends State<BoardScreen> {
 
   Color _getPriorityColor(String priority) {
     switch (priority) {
-      case 'HIGHEST':
-        return Colors.red.shade100;
-      case 'HIGH':
-        return Colors.red.shade100;
+      case 'Highest':
+        return Colors.red.shade700;
+      case 'High':
+        return Colors.red.shade400;
       case 'Medium':
-        return Colors.orange.shade100;
+        return Colors.orange.shade400;
       case 'Low':
-        return Colors.green.shade100;
+        return Colors.green.shade400;
+      case 'Lowest':
+        return Colors.green.shade700;
       default:
         return Colors.grey.shade300;
     }
