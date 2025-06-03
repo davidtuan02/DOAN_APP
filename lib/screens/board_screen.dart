@@ -124,6 +124,24 @@ class _BoardScreenState extends State<BoardScreen> {
                 return issue;
               }).toList();
 
+              // Clear issues list for all fetched sprints before populating
+              for (var sprint in fetchedSprints) {
+                sprint.issues.clear();
+              }
+
+              // Distribute all fetched tasks into their respective sprints
+              for (var task in allTasks) {
+                if (task.sprintId != null) {
+                  final targetSprint = fetchedSprints.firstWhere(
+                    (sprint) => sprint.id == task.sprintId,
+                    orElse: () => null!, // Allow null if sprint not found (shouldn't happen if API is consistent)
+                  );
+                  if (targetSprint != null) {
+                    targetSprint.issues.add(task); // Add task to the sprint's issues list
+                  }
+                }
+              }
+
               // Filter active sprints
               final List<sprint_model.Sprint> activeSprints = fetchedSprints
                   .where((sprint) => sprint.status.toLowerCase() == SprintStatus.active.toString().split('.').last)
@@ -132,6 +150,8 @@ class _BoardScreenState extends State<BoardScreen> {
               if (activeSprints.isNotEmpty) {
                 setState(() {
                   _selectedSprint = activeSprints.first;
+                  // _issues list is now populated by filtering allTasks by selected sprint id
+                  // This is correct for displaying on the board
                   _issues = allTasks.where((issue) => issue.sprintId == _selectedSprint?.id).toList();
                   print('Selected sprint: ${_selectedSprint?.id}');
                   print('Found ${_issues.length} issues for selected sprint');
@@ -617,8 +637,9 @@ class _BoardScreenState extends State<BoardScreen> {
   }
 
   void _showCompleteSprintDialog(BuildContext context, sprint_model.Sprint sprint) {
-    final completedTasks = sprint.issues.where((issue) => issue.status == 'DONE').length;
-    final incompleteTasks = sprint.issues.length - completedTasks;
+    // Calculate based on the currently displayed issues (_issues list), which reflects recent drag-and-drop updates
+    final completedTasks = _issues.where((issue) => issue.status == 'DONE').length;
+    final incompleteTasks = _issues.length - completedTasks;
 
     showDialog(
       context: context,
