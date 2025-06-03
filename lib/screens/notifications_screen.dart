@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../models/notification.dart' as notif_model;
 import '../config/api_config.dart';
+import 'dart:async';
 
 class NotificationsScreen extends StatefulWidget {
   final String accessToken;
@@ -22,11 +23,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   List<notif_model.UserNotification> _notifications = [];
   bool _isLoading = false;
   bool _showUnreadOnly = false; // State variable for filtering
+  String? _error;
+  late Timer _timer;
 
   @override
   void initState() {
     super.initState();
     _fetchNotifications();
+    // Start the timer to fetch notifications every 3 seconds
+    _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      _fetchNotifications();
+    });
+  }
+
+  @override
+  void dispose() {
+    // Cancel the timer when the widget is disposed
+    _timer.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchNotifications() async {
