@@ -21,10 +21,43 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Jira Clone',
+      title: 'Jira Clone App',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
+        colorScheme: ColorScheme.light(
+          primary: const Color(0xFF0052CC),
+          primaryContainer: const Color(0xFF4C9AFF),
+          secondary: const Color(0xFF0052CC),
+          secondaryContainer: const Color(0xFF4C9AFF),
+          surface: Colors.white,
+          background: const Color(0xFFF4F5F7),
+          error: Colors.red.shade700,
+          onPrimary: Colors.white,
+          onSecondary: Colors.white,
+          onSurface: Colors.black87,
+          onBackground: Colors.black87,
+          onError: Colors.white,
+          brightness: Brightness.light,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF0052CC),
+          foregroundColor: Colors.white,
+          elevation: 4.0,
+        ),
+        cardTheme: CardThemeData(
+          elevation: 1.0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+          margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 0.0),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            foregroundColor: Colors.white,
+            backgroundColor: const Color(0xFF0052CC),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4.0),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          ),
+        ),
       ),
       initialRoute: '/login',
       routes: {
