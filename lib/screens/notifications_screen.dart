@@ -173,7 +173,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           // Filter toggle
           Row(
             children: [
-              const Text('Chưa đọc'),
+              const Text('Unread'),
               Switch(
                 value: _showUnreadOnly,
                 onChanged: (value) {
@@ -186,7 +186,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
           // Mark all as read button
           IconButton(
-            icon: const Icon(Icons.mark_email_read),
+            icon: const Icon(Icons.done_all),
             tooltip: 'Mark all as read',
             onPressed: _markAllAsRead,
           ),
@@ -197,27 +197,52 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           : displayedNotifications.isEmpty
               ? Center(
                   child: Text(_showUnreadOnly
-                      ? 'Không có thông báo chưa đọc'
-                      : 'Không có thông báo nào'),
+                      ? 'No unread announcement yet'
+                      : 'No announcement yet'),
                 )
               : ListView.builder(
                   itemCount: displayedNotifications.length,
                   itemBuilder: (context, index) {
                     final notification = displayedNotifications[index];
-                    return ListTile(
-                      title: Text(notification.title ?? ''),
-                      subtitle: Text(
-                        '${notification.message ?? ''}\n${notification.formattedCreatedAt}',
+                    return Card(
+                      elevation: 1.0,
+                      margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.circle,
+                          color: notification.isRead ? Colors.grey.shade400 : Theme.of(context).primaryColor,
+                        ),
+                        title: Text(
+                          notification.title ?? 'No Title',
+                          style: TextStyle(
+                            fontWeight: notification.isRead ? FontWeight.normal : FontWeight.bold,
+                            color: notification.isRead ? Colors.grey[700] : Colors.black87,
+                          ),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              notification.message ?? 'No message',
+                              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              notification.formattedCreatedAt ?? '',
+                              style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                            ),
+                          ],
+                        ),
+                        isThreeLine: true,
+                        tileColor: notification.isRead ? null : Theme.of(context).primaryColor.withOpacity(0.05),
+                        onTap: () {
+                          if (!notification.isRead) {
+                            _markAsRead(notification.id);
+                          }
+                          // TODO: Navigate based on notification.link
+                        },
+                        // TODO: Add trailing icon for deletion if needed
                       ),
-                      isThreeLine: true,
-                      tileColor: notification.isRead ? null : Colors.blue.shade50,
-                      onTap: () {
-                        if (!notification.isRead) {
-                          _markAsRead(notification.id);
-                        }
-                        // TODO: Navigate based on notification.link
-                      },
-                      // TODO: Add trailing icon for deletion if needed
                     );
                   },
                 ),
