@@ -25,6 +25,7 @@ class BacklogScreen extends StatefulWidget {
 
 class _BacklogScreenState extends State<BacklogScreen> {
   late Project selectedProject;
+  String? _boardId;
 
   @override
   void initState() {
@@ -381,13 +382,40 @@ class _BacklogScreenState extends State<BacklogScreen> {
     print('Access token being used: ${widget.accessToken}');
     if (!mounted) return;
 
-    final sprintsUrl = Uri.parse('$baseUrl/sprints/project/$projectId');
-    final headers = <String, String>{
+    // Fetch project details to get boardId
+    final projectUrl = Uri.parse('$baseUrl/projects/$projectId');
+     final headers = <String, String>{
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
     };
 
     try {
+      print('Fetching project details from URL: $projectUrl');
+      final projectResponse = await http.get(projectUrl, headers: headers);
+      print('Project response status: ${projectResponse.statusCode}');
+      print('Project response body: ${projectResponse.body}');
+
+      if (!mounted) return;
+
+      if (projectResponse.statusCode == 200) {
+        final dynamic projectData = json.decode(projectResponse.body);
+        if (projectData is Map<String, dynamic>) {
+          // Update selectedProject with full details if needed
+          // selectedProject = Project.fromJson(projectData);
+
+          // Extract boardId
+          if (projectData['boards'] is List && projectData['boards'].isNotEmpty) {
+            _boardId = projectData['boards'][0]['id']; // Assuming the first board is the one needed
+            print('Extracted boardId: $_boardId');
+          } else {
+            print('No boards found for this project.');
+             // Handle case where no board is found - maybe show an error or disable sprint creation
+          }
+        }
+      }
+
+      // Fetch sprints
+      final sprintsUrl = Uri.parse('$baseUrl/sprints/project/$projectId');
       print('Fetching sprints from URL: $sprintsUrl');
       print('Using headers: $headers');
       final sprintsResponse = await http.get(sprintsUrl, headers: headers);
@@ -588,7 +616,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
                       DropdownMenuItem(value: 'DONE', child: Text('Done')),
                     ],
                     onChanged: (value) {
-                      status = value!;
+                       status = value!;
                     },
                   ),
                 ],
@@ -602,7 +630,6 @@ class _BacklogScreenState extends State<BacklogScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                print('Create button pressed');
                 if (formKey.currentState!.validate()) {
                   formKey.currentState!.save();
                   
@@ -705,6 +732,15 @@ class _BacklogScreenState extends State<BacklogScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Add Sprint Button
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: ElevatedButton.icon(
+                  onPressed: () => _showAddSprintDialog(context),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Sprint'),
+                ),
+              ),
               // Backlog section
               Card(
                 elevation: 2,
@@ -1110,5 +1146,187 @@ class _BacklogScreenState extends State<BacklogScreen> {
         ),
       );
     }
+  }
+
+  // Function to show add sprint dialog
+  void _showAddSprintDialog(BuildContext context) {
+    final formKey = GlobalKey<FormState>();
+    String name = '';
+    String goal = '';
+    DateTime? startDate;
+    DateTime? endDate;
+    String status = 'planning'; // Use lowercase as per API requirement
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) { // Use dialogContext to avoid confusion
+        return StatefulBuilder( // Use StatefulBuilder here
+          builder: (BuildContext context, StateSetter setDialogState) { // setDialogState to rebuild the dialog
+            return AlertDialog(
+              title: const Text('Create Sprint'),
+              content: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        decoration: const InputDecoration(
+                          labelText: 'Name',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter a name';
+                          }
+                          return null;
+                        },
+                        onSaved: (value) => name = value!,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        decoration: const InputDecoration(
+                          labelText: 'Goal',
+                          border: OutlineInputBorder(),
+                        ),
+                        onSaved: (value) => goal = value!,
+                      ),
+                      const SizedBox(height: 16),
+                      // Start Date Picker
+                       ListTile(
+                        title: Text(startDate == null ? 'Select Start Date' : 'Start Date: ${startDate!.toLocal().toString().split(' ')[0]}'),
+                        trailing: const Icon(Icons.calendar_today),
+                        onTap: () async {
+                          final pickedDate = await showDatePicker(
+                            context: context,
+                            initialDate: startDate ?? DateTime.now(),
+                            firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                            lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                          );
+                          if (pickedDate != null) {
+                            setDialogState(() { // Use setDialogState here
+                              startDate = pickedDate;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                       // End Date Picker
+                      ListTile(
+                        title: Text(endDate == null ? 'Select End Date' : 'End Date: ${endDate!.toLocal().toString().split(' ')[0]}'),
+                        trailing: const Icon(Icons.calendar_today),
+                        onTap: () async {
+                          final pickedDate = await showDatePicker(
+                            context: context,
+                            initialDate: endDate ?? startDate ?? DateTime.now(),
+                            firstDate: startDate ?? DateTime.now().subtract(const Duration(days: 365)),
+                            lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                          );
+                          if (pickedDate != null) {
+                            setDialogState(() { // Use setDialogState here
+                              endDate = pickedDate;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        decoration: const InputDecoration(
+                          labelText: 'Status',
+                          border: OutlineInputBorder(),
+                        ),
+                        value: status,
+                        items: const [
+                          DropdownMenuItem(value: 'planning', child: Text('Planning')),
+                          DropdownMenuItem(value: 'active', child: Text('Active')),
+                          DropdownMenuItem(value: 'completed', child: Text('Completed')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) setDialogState(() { status = value!; }); // Use setDialogState here
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (formKey.currentState!.validate()) {
+                      formKey.currentState!.save();
+                      if (_boardId == null) {
+                         // Handle case where boardId is not available
+                         print('Error: Board ID not available.');
+                         ScaffoldMessenger.of(context).showSnackBar(
+                           const SnackBar(
+                             content: Text('Error: Cannot create sprint, board ID not found.'),
+                             backgroundColor: Colors.red,
+                           ),
+                         );
+                         Navigator.of(dialogContext).pop(); // Use dialogContext here
+                         return;
+                      }
+
+                      try {
+                        final response = await http.post(
+                          Uri.parse('$baseUrl/sprints/create/$_boardId'),
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'tasks_token': widget.accessToken,
+                          },
+                          body: json.encode({
+                            'name': name,
+                            'goal': goal,
+                            'startDate': startDate?.toIso8601String(),
+                            'endDate': endDate?.toIso8601String(),
+                            'status': status,
+                          }),
+                        );
+
+                        if (!mounted) return;
+
+                        if (response.statusCode == 201) {
+                          Navigator.of(dialogContext).pop(); // Use dialogContext here
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Sprint created successfully'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                          _fetchSprintsAndIssues(widget.projectId); // Refresh the list
+                        } else {
+                          print('Failed to create sprint: ${response.statusCode}');
+                          print('Response body: ${response.body}');
+                           ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to create sprint: ${response.statusCode}. ${response.body}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        print('Error creating sprint: $e');
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error creating sprint: ${e.toString()}'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Create'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 } 
