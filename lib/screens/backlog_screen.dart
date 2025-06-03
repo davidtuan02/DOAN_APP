@@ -4,6 +4,8 @@ import '../widgets/create_issue_form.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../config/api_config.dart';
+import '../models/sprint.dart';
+import '../models/issue.dart';
 
 class BacklogScreen extends StatefulWidget {
   final String userId;
@@ -176,7 +178,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            issue.title,
+                            issue.title ?? '',
                             style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
@@ -248,7 +250,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
                         ],
                       ),
                     ),
-                    _buildDetailRow('Priority', issue.priority),
+                    _buildDetailRow('Priority', issue.priority ?? ''),
                     if (issue.type != null && issue.type!.isNotEmpty)
                       _buildDetailRow('Type', issue.type!),
                     if (issue.assignee.isNotEmpty)
@@ -384,6 +386,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
 
     // Fetch project details to get boardId
     final projectUrl = Uri.parse('$baseUrl/projects/$projectId');
+    print('Fetching project from URL: $projectUrl');
      final headers = <String, String>{
       'Content-Type': 'application/json',
       'tasks_token': widget.accessToken,
@@ -399,6 +402,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
 
       if (projectResponse.statusCode == 200) {
         final dynamic projectData = json.decode(projectResponse.body);
+        print('Decoded project data: $projectData');
         if (projectData is Map<String, dynamic>) {
           // Update selectedProject with full details if needed
           // selectedProject = Project.fromJson(projectData);
@@ -467,8 +471,10 @@ class _BacklogScreenState extends State<BacklogScreen> {
 
           if (tasksResponse.statusCode == 200) {
             final dynamic tasksResponseData = json.decode(tasksResponse.body);
+            print('Decoded tasks data: $tasksResponseData');
             if (tasksResponseData is List<dynamic>) {
               List<Issue> allTasks = tasksResponseData.map((issueJson) {
+                print('Processing issue JSON: $issueJson');
                 final issue = Issue.fromJson(issueJson as Map<String, dynamic>);
                 // Set sprintId based on our mapping
                 issue.sprintId = issueToSprintMap[issue.id];
@@ -499,6 +505,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
                   startDate: sprint.startDate,
                   endDate: sprint.endDate,
                   issues: sprintIssuesMap[sprint.id] ?? [],
+                  status: sprint.status,
                 ));
               }
 

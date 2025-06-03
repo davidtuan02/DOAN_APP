@@ -40,8 +40,13 @@ class Issue {
   });
 
   factory Issue.fromJson(Map<String, dynamic> json) {
+    print('Issue.fromJson input: $json');
+    print('Issue id type: ${json['id']?.runtimeType}');
+    print('Issue taskName type: ${json['taskName']?.runtimeType}');
+    print('Issue sprintId type: ${json['sprintId']?.runtimeType}');
+    
     return Issue(
-      id: json['id'] as String,
+      id: json['id'].toString(),
       taskName: json['taskName'] as String?,
       taskDescription: json['taskDescription'] as String?,
       storyPoints: json['storyPoints'] as int?,
@@ -54,7 +59,7 @@ class Issue {
       type: json['type'] as String? ?? '',
       priority: json['priority'] as String? ?? '',
       status: json['status'] as String? ?? '',
-      sprintId: json['sprintId'] as String?,
+      sprintId: json['sprintId']?.toString(),
       assignee: json['assignee'] is Map<String, dynamic> ? json['assignee'] as Map<String, dynamic>? : null,
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : DateTime.now(),
       updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt'] as String) : DateTime.now(),

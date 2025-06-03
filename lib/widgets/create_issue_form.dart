@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../models/sprint.dart';
+import '../models/issue.dart';
 import '../models/project.dart'; // Assuming Issue model is in project.dart
 
 class CreateIssueForm extends StatefulWidget {
