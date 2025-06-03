@@ -413,8 +413,10 @@ class _BoardScreenState extends State<BoardScreen> {
   }
 
   Widget _buildColumn(String title, List<issue_model.Issue> issues, String status) {
+    final bool isSprintActive = _selectedSprint?.status.toLowerCase() == 'active';
+    
     return DragTarget<issue_model.Issue>(
-      onWillAccept: (issue) => issue != null,
+      onWillAccept: (issue) => isSprintActive && issue != null,
       onAccept: (issue) => _handleIssueDrop(issue, status),
       builder: (context, candidateData, rejectedData) {
         return Container(
@@ -426,12 +428,25 @@ class _BoardScreenState extends State<BoardScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Row(
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (!isSprintActive)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: Icon(
+                            Icons.lock_outline,
+                            size: 16,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 Expanded(
@@ -439,83 +454,27 @@ class _BoardScreenState extends State<BoardScreen> {
                     itemCount: issues.length,
                     itemBuilder: (context, index) {
                       final issue = issues[index];
-                      return Draggable<issue_model.Issue>(
-                        data: issue,
-                        feedback: Material(
-                          elevation: 4,
-                          child: Container(
-                            width: MediaQuery.of(context).size.width * 0.7,
-                            child: Card(
-                              child: ListTile(
-                                title: Text(issue.title ?? ''),
-                                subtitle: Text(issue.description ?? ''),
+                      return isSprintActive
+                          ? Draggable<issue_model.Issue>(
+                              data: issue,
+                              feedback: Material(
+                                elevation: 4,
+                                child: Container(
+                                  width: MediaQuery.of(context).size.width * 0.7,
+                                  child: Card(
+                                    child: ListTile(
+                                      title: Text(issue.title ?? ''),
+                                      subtitle: Text(issue.description ?? ''),
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        ),
-                        childWhenDragging: Container(
-                          height: 0,
-                        ),
-                        child: Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          child: ListTile(
-                            title: Text(
-                              issue.title ?? '',
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  issue.description ?? '',
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 2,
-                                ),
-                                const SizedBox(height: 4),
-                                Wrap(
-                                  spacing: 8,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: _getPriorityColor(issue.priority ?? '').withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        issue.priority ?? '',
-                                        style: TextStyle(
-                                          color: _getPriorityColor(issue.priority ?? ''),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: _getStatusColor(issue.status ?? '').withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        issue.type ?? '',
-                                        style: TextStyle(
-                                          color: _getStatusColor(issue.status ?? ''),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            onTap: () {
-                              // TODO: Show issue details
-                            },
-                          ),
-                        ),
-                      );
+                              childWhenDragging: Container(
+                                height: 0,
+                              ),
+                              child: _buildIssueCard(issue),
+                            )
+                          : _buildIssueCard(issue);
                     },
                   ),
                 ),
@@ -524,6 +483,68 @@ class _BoardScreenState extends State<BoardScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildIssueCard(issue_model.Issue issue) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: ListTile(
+        title: Text(
+          issue.title ?? '',
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              issue.description ?? '',
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getPriorityColor(issue.priority ?? '').withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    issue.priority ?? '',
+                    style: TextStyle(
+                      color: _getPriorityColor(issue.priority ?? ''),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(issue.status ?? '').withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    issue.type ?? '',
+                    style: TextStyle(
+                      color: _getStatusColor(issue.status ?? ''),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        onTap: () {
+          // TODO: Show issue details
+        },
+      ),
     );
   }
 
