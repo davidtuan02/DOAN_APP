@@ -907,6 +907,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
             ),
           ],
         ),
+        onTap: () => _showEditIssueDialog(context, issue),
         trailing: PopupMenuButton<String>(
           onSelected: (String? newSprintId) {
             print('Selected menu item: ${newSprintId ?? 'Move to Backlog'}');
@@ -942,5 +943,172 @@ class _BacklogScreenState extends State<BacklogScreen> {
         ),
       ),
     );
+  }
+
+  void _showEditIssueDialog(BuildContext context, Issue issue) {
+    final formKey = GlobalKey<FormState>();
+    String name = issue.title ?? '';
+    String type = issue.type ?? 'Task';
+    String priority = issue.priority ?? 'Medium';
+    String status = issue.status ?? 'CREATED';
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Edit Issue'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    initialValue: name,
+                    decoration: const InputDecoration(
+                      labelText: 'Name',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter a name';
+                      }
+                      return null;
+                    },
+                    onSaved: (value) => name = value!,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'Type',
+                      border: OutlineInputBorder(),
+                    ),
+                    value: type,
+                    items: const [
+                      DropdownMenuItem(value: 'Epic', child: Text('Epic')),
+                      DropdownMenuItem(value: 'Story', child: Text('Story')),
+                      DropdownMenuItem(value: 'Task', child: Text('Task')),
+                      DropdownMenuItem(value: 'Bug', child: Text('Bug')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) type = value;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'Priority',
+                      border: OutlineInputBorder(),
+                    ),
+                    value: priority,
+                    items: const [
+                      DropdownMenuItem(value: 'Highest', child: Text('Highest')),
+                      DropdownMenuItem(value: 'High', child: Text('High')),
+                      DropdownMenuItem(value: 'Medium', child: Text('Medium')),
+                      DropdownMenuItem(value: 'Low', child: Text('Low')),
+                      DropdownMenuItem(value: 'Lowest', child: Text('Lowest')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) priority = value;
+                    },
+                  ),
+                   const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'Status',
+                      border: OutlineInputBorder(),
+                    ),
+                    value: status,
+                    items: const [
+                      DropdownMenuItem(value: 'CREATED', child: Text('Created')),
+                      DropdownMenuItem(value: 'IN_PROGRESS', child: Text('In Progress')),
+                      DropdownMenuItem(value: 'REVIEW', child: Text('Review')),
+                      DropdownMenuItem(value: 'DONE', child: Text('Done')),
+                    ],
+                    onChanged: (value) {
+                       if (value != null) status = value;
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (formKey.currentState!.validate()) {
+                  formKey.currentState!.save();
+                  Navigator.of(context).pop(); // Close dialog
+                  await _updateIssueDetails(issue.id!, name, type, priority, status); // Call update API
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _updateIssueDetails(String issueId, String name, String type, String priority, String status) async {
+     try {
+      final url = Uri.parse('$baseUrl/tasks/$issueId');
+      final headers = {
+        'Content-Type': 'application/json',
+        'tasks_token': widget.accessToken,
+      };
+
+      final body = json.encode({
+        'taskName': name,
+        'type': type,
+        'priority': priority,
+        'status': status,
+        // Include other fields if required by the PUT API (e.g., taskDescription, reporterId)
+        // For now, assuming only editable fields are needed.
+      });
+
+      print('Update Issue Details Request Body: $body');
+
+      final response = await http.put(
+        url,
+        headers: headers,
+        body: body,
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        print('Successfully updated issue details');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Issue updated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _fetchSprintsAndIssues(widget.projectId); // Refresh list after update
+      } else {
+        print('Failed to update issue details: ${response.statusCode}');
+        print('Response body: ${response.body}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update issue: ${response.statusCode}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error updating issue details: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating issue: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 } 
