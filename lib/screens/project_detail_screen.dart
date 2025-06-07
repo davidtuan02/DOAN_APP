@@ -294,7 +294,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         children: [
                           if (member.userEmail != null && member.userEmail!.isNotEmpty)
                             Text(member.userEmail!),
-                          Text('Role: $roleText'),
+                          Text('Role: 1'),
                         ],
                       ),
                       trailing: Text(

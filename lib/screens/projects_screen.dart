@@ -380,13 +380,13 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                                                 String roleText = 'MEMBER';
                                                 if (member.accessLevel != null) {
                                                   switch (member.accessLevel) {
-                                                    case 3:
+                                                    case 50:
                                                       roleText = 'MANAGER';
                                                       break;
-                                                    case 2:
+                                                    case 40:
                                                       roleText = 'LEADER';
                                                       break;
-                                                    case 1:
+                                                    case 30:
                                                       roleText = 'MEMBER';
                                                       break;
                                                     default:
