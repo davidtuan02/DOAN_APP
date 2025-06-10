@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../models/user.dart';
 import '../config/api_config.dart';
+import '../globale.dart' as globals;
 
 class AccountScreen extends StatefulWidget {
   final String accessToken;
@@ -69,6 +70,7 @@ class _AccountScreenState extends State<AccountScreen> {
                  roleStr.toUpperCase() == 'MANAGER' ? UserRole.MANAGER :
                  roleStr.toUpperCase() == 'LEADER' ? UserRole.LEADER :
                  UserRole.MEMBER;
+          globals.isManager = _role == UserRole.MANAGER;
           _emailController.text = _email;
           _usernameController.text = _username;
           _ageController.text = _age.toString();

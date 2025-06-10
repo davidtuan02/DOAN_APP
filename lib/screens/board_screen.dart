@@ -5,6 +5,7 @@ import '../models/issue.dart' as issue_model;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../config/api_config.dart';
+import '../globale.dart' as globals;
 
 // Global API configuration
 // const String baseUrl = 'http://192.168.63.1:8000/api';
@@ -53,126 +54,137 @@ class _BoardScreenState extends State<BoardScreen> {
   }
 
   Future<void> _fetchSprintsAndIssues(String projectId) async {
-    print('Fetching sprints and issues for project: $projectId');
-    print('Access token being used: ${widget.accessToken}');
+  print('Fetching sprints and issues for project: $projectId');
+  print('Access token being used: ${widget.accessToken}');
+  if (!mounted) return;
+
+  final sprintsUrl = Uri.parse('$baseUrl/sprints/project/$projectId');
+  final headers = <String, String>{
+    'Content-Type': 'application/json',
+    'tasks_token': widget.accessToken,
+  };
+
+  try {
+    print('Fetching sprints...');
+    final sprintsResponse = await http.get(sprintsUrl, headers: headers);
+    print('Sprints response status: ${sprintsResponse.statusCode}');
+    print('Sprints response body: ${sprintsResponse.body}');
+
     if (!mounted) return;
 
-    final sprintsUrl = Uri.parse('$baseUrl/sprints/project/$projectId');
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-      'tasks_token': widget.accessToken,
-    };
+    if (sprintsResponse.statusCode == 200) {
+      final dynamic sprintsResponseData = json.decode(sprintsResponse.body);
 
-    try {
-      print('Fetching sprints...');
-      final sprintsResponse = await http.get(sprintsUrl, headers: headers);
-      print('Sprints response status: ${sprintsResponse.statusCode}');
-      print('Sprints response body: ${sprintsResponse.body}');
+      if (sprintsResponseData is List<dynamic>) {
+        List<sprint_model.Sprint> fetchedSprints = [];
+        Map<String, String> issueToSprintMap = {};
 
-      if (!mounted) return;
-
-      if (sprintsResponse.statusCode == 200) {
-        final dynamic sprintsResponseData = json.decode(sprintsResponse.body);
-
-        if (sprintsResponseData is List<dynamic>) {
-          List<sprint_model.Sprint> fetchedSprints = [];
-          Map<String, String> issueToSprintMap = {};
-
-          // Process fetched sprints
-          for (var sprintJson in sprintsResponseData) {
-            if (sprintJson is Map<String, dynamic>) {
-              try {
-                final sprint = sprint_model.Sprint.fromJson(sprintJson);
-                fetchedSprints.add(sprint);
-                // Map issues to sprint
-                if (sprintJson['issues'] != null && sprintJson['issues'] is List) {
-                  for (var issue in sprintJson['issues']) {
-                    if (issue is Map<String, dynamic> && issue['id'] != null) {
-                      issueToSprintMap[issue['id']] = sprint.id;
-                      print('Mapped issue ${issue['id']} to sprint ${sprint.id}');
-                    }
+        for (var sprintJson in sprintsResponseData) {
+          if (sprintJson is Map<String, dynamic>) {
+            try {
+              final sprint = sprint_model.Sprint.fromJson(sprintJson);
+              fetchedSprints.add(sprint);
+              if (sprintJson['issues'] != null && sprintJson['issues'] is List) {
+                for (var issue in sprintJson['issues']) {
+                  if (issue is Map<String, dynamic> && issue['id'] != null) {
+                    issueToSprintMap[issue['id']] = sprint.id;
                   }
                 }
-              } catch (e) {
-                print('Error parsing sprint: $e');
-                print('Problematic sprint JSON: $sprintJson');
               }
+            } catch (e) {
+              print('Error parsing sprint: $e');
             }
           }
+        }
 
-          setState(() {
-            _sprints = fetchedSprints;
-          });
+        setState(() {
+          _sprints = fetchedSprints;
+          // Synchronize _selectedSprint with the new list
+          if (_sprints.isNotEmpty) {
+            if (_selectedSprint != null) {
+              final matchingSprint = _sprints.firstWhere(
+                (s) => s.id == _selectedSprint!.id,
+                orElse: () => _sprints.first, // Default to first sprint if no match
+              );
+              _selectedSprint = matchingSprint;
+            } else {
+              _selectedSprint = _sprints.firstWhere(
+                (s) => s.status.toLowerCase() == 'active'.toLowerCase(),
+                orElse: () => _sprints.first, // Default to first sprint if no active
+              );
+            }
+          } else {
+            _selectedSprint = null; // No sprints available
+          }
+          // Update _issues based on the new _selectedSprint
+          _issues = _selectedSprint != null ? _issues.where((i) => i.sprintId == _selectedSprint!.id).toList() : [];
+        });
 
-          // Fetch all tasks for the project
-          final tasksUrl = Uri.parse('$baseUrl/tasks/project/$projectId');
-          print('Fetching tasks...');
-          final tasksResponse = await http.get(tasksUrl, headers: headers);
-          print('Tasks response status: ${tasksResponse.statusCode}');
-          print('Tasks response body: ${tasksResponse.body}');
-              
-          if (!mounted) return;
+        // Fetch tasks
+        final tasksUrl = Uri.parse('$baseUrl/tasks/project/$projectId');
+        print('Fetching tasks...');
+        final tasksResponse = await http.get(tasksUrl, headers: headers);
+        print('Tasks response status: ${tasksResponse.statusCode}');
+        print('Tasks response body: ${tasksResponse.body}');
 
-          if (tasksResponse.statusCode == 200) {
-            final dynamic tasksResponseData = json.decode(tasksResponse.body);
-            if (tasksResponseData is List<dynamic>) {
-              List<issue_model.Issue> allTasks = tasksResponseData.map((issueJson) {
-                final issue = issue_model.Issue.fromJson(issueJson as Map<String, dynamic>);
-                // Set sprintId based on our mapping
-                issue.sprintId = issueToSprintMap[issue.id];
-                print('Issue ${issue.id} mapped to sprint ${issue.sprintId}');
-                return issue;
-              }).toList();
+        if (!mounted) return;
 
-              // Clear issues list for all fetched sprints before populating
-              for (var sprint in fetchedSprints) {
-                sprint.issues.clear();
-              }
+        if (tasksResponse.statusCode == 200) {
+          final dynamic tasksResponseData = json.decode(tasksResponse.body);
+          if (tasksResponseData is List<dynamic>) {
+            List<issue_model.Issue> allTasks = tasksResponseData.map((issueJson) {
+              final issue = issue_model.Issue.fromJson(issueJson as Map<String, dynamic>);
+              issue.sprintId = issueToSprintMap[issue.id];
+              return issue;
+            }).toList();
 
-              // Distribute all fetched tasks into their respective sprints
-              for (var task in allTasks) {
-                if (task.sprintId != null) {
+            for (var sprint in fetchedSprints) {
+              sprint.issues.clear();
+            }
+
+            for (var task in allTasks) {
+              if (task.sprintId != null) {
+                try {
                   final targetSprint = fetchedSprints.firstWhere(
-                    (sprint) => sprint.id == task.sprintId,
-                    orElse: () => null!, // Allow null if sprint not found (shouldn't happen if API is consistent)
-                  );
-                  if (targetSprint != null) {
-                    targetSprint.issues.add(task); // Add task to the sprint's issues list
+                    (s) => s.id == task.sprintId,
+                  ); // Throws StateError if not found, handled by try-catch
+                  targetSprint.issues.add(task);
+                } catch (e) {
+                  if (e is StateError) {
+                    print('No matching sprint found for task ${task.id} with sprintId ${task.sprintId}');
+                  } else {
+                    print('Error processing task ${task.id}: $e');
                   }
                 }
               }
+            }
 
-              // Filter active sprints
-              final List<sprint_model.Sprint> activeSprints = fetchedSprints
-                  .where((sprint) => sprint.status.toLowerCase() == SprintStatus.active.toString().split('.').last)
-                  .toList();
+            final List<sprint_model.Sprint> activeSprints = fetchedSprints
+                .where((sprint) => sprint.status.toLowerCase() == SprintStatus.active.toString().split('.').last)
+                .toList();
 
-              if (activeSprints.isNotEmpty) {
-                setState(() {
-                  _selectedSprint = activeSprints.first;
-                  // _issues list is now populated by filtering allTasks by selected sprint id
-                  // This is correct for displaying on the board
-                  _issues = allTasks.where((issue) => issue.sprintId == _selectedSprint?.id).toList();
-                  print('Selected sprint: ${_selectedSprint?.id}');
-                  print('Found ${_issues.length} issues for selected sprint');
-                });
-              }
+            if (activeSprints.isNotEmpty && _selectedSprint == null) {
+              setState(() {
+                _selectedSprint = activeSprints.first;
+                _issues = allTasks.where((issue) => issue.sprintId == _selectedSprint?.id).toList();
+              });
             }
           }
         }
       }
-    } catch (e, stackTrace) {
-      print('Error fetching sprints and issues: $e');
-      print('Stack trace: $stackTrace');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to refresh data: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
     }
+  } catch (e, stackTrace) {
+    print('Error fetching sprints and issues: $e');
+    print('Stack trace: $stackTrace');
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Failed to refresh data: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
+}
 
   void _handleSprintChanged(sprint_model.Sprint? newSprint) async {
     if (newSprint != null) {
@@ -342,8 +354,10 @@ class _BoardScreenState extends State<BoardScreen> {
                     ),
                   ),
                 ),
-                // Complete Sprint Button (visible only for active sprints)
-                if (_selectedSprint != null && _selectedSprint!.status.toLowerCase() == 'active')
+                // Complete Sprint Button (visible only for active sprints and MANAGER role)
+                if (globals.isManager && 
+                    _selectedSprint != null && 
+                    _selectedSprint!.status.toLowerCase() == 'active')
                   Padding(
                     padding: const EdgeInsets.only(left: 8.0),
                     child: ElevatedButton(
@@ -353,8 +367,10 @@ class _BoardScreenState extends State<BoardScreen> {
                       child: const Text('Complete Sprint'),
                     ),
                   ),
-                // Start Sprint Button (visible only for planning sprints)
-                if (_selectedSprint != null && _selectedSprint!.status.toLowerCase() == 'planning')
+                // Start Sprint Button (visible only for planning sprints and MANAGER role)
+                if (globals.isManager && 
+                    _selectedSprint != null && 
+                    _selectedSprint!.status.toLowerCase() == 'planning')
                   Padding(
                     padding: const EdgeInsets.only(left: 8.0),
                     child: ElevatedButton(
@@ -679,51 +695,49 @@ class _BoardScreenState extends State<BoardScreen> {
   }
 
   Future<void> _completeSprint(String sprintId) async {
-    print('Attempting to complete sprint: $sprintId');
-    final url = Uri.parse('$baseUrl/sprints/$sprintId/complete');
-    final headers = {
-      'Content-Type': 'application/json',
-      'tasks_token': widget.accessToken,
-    };
+  print('Attempting to complete sprint: $sprintId');
+  final url = Uri.parse('$baseUrl/sprints/$sprintId/complete');
+  final headers = {
+    'Content-Type': 'application/json',
+    'tasks_token': widget.accessToken,
+  };
 
-    try {
-      final response = await http.put(
-        url,
-        headers: headers,
+  try {
+    final response = await http.put(url, headers: headers);
+
+    if (!mounted) return;
+
+    if (response.statusCode == 200) {
+      print('Successfully completed sprint via API');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sprint completed successfully'),
+          backgroundColor: Colors.green,
+        ),
       );
-
-      if (!mounted) return;
-
-      if (response.statusCode == 200) {
-        print('Successfully completed sprint via API');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sprint completed successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        _fetchSprintsAndIssues(widget.project.id!);
-      } else {
-        print('Failed to complete sprint: ${response.statusCode}');
-        print('Response body: ${response.body}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to complete sprint: ${response.statusCode}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      print('Error completing sprint: $e');
-      if (!mounted) return;
+      // Refresh data and reset selected sprint if needed
+      await _fetchSprintsAndIssues(widget.project.id!);
+    } else {
+      print('Failed to complete sprint: ${response.statusCode}');
+      print('Response body: ${response.body}');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error completing sprint: ${e.toString()}'),
+          content: Text('Failed to complete sprint: ${response.statusCode}'),
           backgroundColor: Colors.red,
         ),
       );
     }
+  } catch (e) {
+    print('Error completing sprint: $e');
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Error completing sprint: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
+}
 
   void _showStartSprintDialog(BuildContext context, sprint_model.Sprint sprint) {
     showDialog(

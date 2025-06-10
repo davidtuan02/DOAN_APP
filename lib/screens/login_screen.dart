@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../config/api_config.dart';
+import '../globale.dart' as globals;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -40,6 +41,8 @@ class _LoginScreenState extends State<LoginScreen> {
           final responseData = json.decode(response.body);
           final accessToken = responseData['accessToken'];
           final userId = responseData['user']['id'];
+          final roleStr = responseData['user']['role'] as String?;
+          globals.isManager = roleStr != null && roleStr.toUpperCase() == 'MANAGER';
           print('Login successful. Access Token: $accessToken');
           // TODO: Store the access token securely (e.g., using flutter_secure_storage)
           // TODO: Navigate to the main screen
