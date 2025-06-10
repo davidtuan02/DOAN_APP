@@ -837,9 +837,15 @@ class _BacklogScreenState extends State<BacklogScreen> {
                                 children: [
                                   Text(
                                     sprint.name,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
+                                      decoration: sprint.status.toLowerCase() == 'completed'
+                                          ? TextDecoration.lineThrough
+                                          : TextDecoration.none,
+                                      color: sprint.status.toLowerCase() == 'completed'
+                                          ? Colors.grey
+                                          : Colors.black,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
