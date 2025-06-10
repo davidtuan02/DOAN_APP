@@ -195,22 +195,8 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         foregroundColor: Colors.black87,
         actions: [
           IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              // TODO: Implement search functionality
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: () {
-              // TODO: Implement filter functionality
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () {
-              // TODO: Show create project dialog
-            },
+            icon: const Icon(Icons.refresh),
+            onPressed: _fetchProjects,
           ),
         ],
       ),
