@@ -6,6 +6,7 @@ import 'dart:convert';
 import '../config/api_config.dart';
 import '../models/sprint.dart';
 import '../models/issue.dart';
+import '../globale.dart' as globals;
 
 class BacklogScreen extends StatefulWidget {
   final String userId;
@@ -740,14 +741,15 @@ class _BacklogScreenState extends State<BacklogScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Add Sprint Button
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: ElevatedButton.icon(
-                  onPressed: () => _showAddSprintDialog(context),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Sprint'),
+              if (globals.isManager)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: ElevatedButton.icon(
+                    onPressed: () => _showAddSprintDialog(context),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Sprint'),
+                  ),
                 ),
-              ),
               // Backlog section
               Card(
                 elevation: 2,
@@ -774,11 +776,12 @@ class _BacklogScreenState extends State<BacklogScreen> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          TextButton.icon(
-                            onPressed: () => _showAddIssueDialog(context),
-                            icon: const Icon(Icons.add),
-                            label: const Text('Create Issue'),
-                          ),
+                          if (globals.isManager)
+                            TextButton.icon(
+                              onPressed: () => _showAddIssueDialog(context),
+                              icon: const Icon(Icons.add),
+                              label: const Text('Create Issue'),
+                            ),
                         ],
                       ),
                     ),
@@ -851,7 +854,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
                               ),
                             ),
                             TextButton.icon(
-                              onPressed: () => _showAddIssueDialog(context, sprintId: sprint.id),
+                              onPressed: globals.isManager ? () => _showAddIssueDialog(context, sprintId: sprint.id) : null,
                               icon: const Icon(Icons.add),
                               label: const Text('Create Issue'),
                             ),
@@ -889,10 +892,12 @@ class _BacklogScreenState extends State<BacklogScreen> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddIssueDialog(context),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: globals.isManager
+          ? FloatingActionButton(
+              onPressed: () => _showAddIssueDialog(context),
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 
